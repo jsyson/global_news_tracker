@@ -155,6 +155,8 @@ with dashboard_tab:
                             """
                     text-align: center;/* 텍스트 가운데 정렬 */
                     border-radius: 10px; /* 모서리 둥글게 */
+                    width: 100%; /* 버튼의 너비를 100%로 설정 */
+                    height: 100%;
                  }</style>""", unsafe_allow_html=True)
 
                 st.markdown(f'<span id="button-after{service_code_name_index}"></span>', unsafe_allow_html=True)
