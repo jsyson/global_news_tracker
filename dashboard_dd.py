@@ -22,11 +22,17 @@ if 'service_code_name_index' not in st.session_state:
 if 'status_cache' not in st.session_state:
     st.session_state.status_cache = dict()
 
+if 'dashboard_refresh_timer' not in st.session_state:
+    st.session_state.dashboard_refresh_timer = 5
+
 if 'refresh_timer_cache' not in st.session_state:
     st.session_state.refresh_timer_cache = -1
 
 if 'num_dashboard_columns' not in st.session_state:
     st.session_state.num_dashboard_columns = 5
+
+if 'display_chart' not in st.session_state:
+    st.session_state.display_chart = True
 
 
 # 웹 페이지 구성
@@ -35,11 +41,13 @@ st.set_page_config(layout="wide")
 
 
 # 사이드바
-st.session_state.display_chart = st.sidebar.checkbox('리포트 차트 보기', value=True)
+st.session_state.display_chart = st.sidebar.checkbox('리포트 차트 보기', value=st.session_state.display_chart)
 st.session_state.num_dashboard_columns = st.sidebar.number_input('출력 컬럼 수',
                                                                  value=st.session_state.num_dashboard_columns,
                                                                  format='%d')
-refresh_timer = st.sidebar.number_input('새로고침 주기(분)', value=1, format='%d')
+st.session_state.dashboard_refresh_timer = st.sidebar.number_input('새로고침 주기(분)',
+                                                                   value=st.session_state.dashboard_refresh_timer,
+                                                                   format='%d')
 
 
 # 메인 페이지
@@ -171,7 +179,7 @@ timer_placeholder = st.sidebar.empty()
 
 # 카운트다운 초 계산
 if st.session_state.refresh_timer_cache <= 0:
-    st.session_state.refresh_timer_cache = refresh_timer * 60
+    st.session_state.refresh_timer_cache = st.session_state.dashboard_refresh_timer * 60
 
 # 타이머 실행
 while st.session_state.refresh_timer_cache >= 0:

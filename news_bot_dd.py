@@ -49,15 +49,6 @@ if "news_list" not in st.session_state:
 if 'service_code_name_index' not in st.session_state:
     st.session_state.service_code_name_index = None
 
-# 서비스 인덱스를 파라미터로 받을 경우
-# https://your_app.streamlit.app/?first_key=1&second_key=two
-if 'service_index' in st.query_params:
-    logging.info(f'{st.query_params=}')
-    st.session_state.service_code_name_index = int(st.query_params["service_index"])
-
-if 'another_service_text' not in st.session_state:
-    st.session_state.another_service_text = None
-
 if "companies_list" not in st.session_state:
     # 최초 - 파일이 없거나 리스트가 비어있을 경우
     config.get_service_chart_mapdf(None)
@@ -65,6 +56,9 @@ if "companies_list" not in st.session_state:
 
 if 'search_interval_timer_cache' not in st.session_state:
     st.session_state.search_interval_timer_cache = -1
+
+if 'search_interval_min' not in st.session_state:
+    st.session_state.search_interval_min = 5
 
 
 # # # # # # # # # #
@@ -184,7 +178,7 @@ def fetch_news(keyword_, infinite_loop=False):
         display_news_df(news_df_, keyword_)
 
     while infinite_loop:
-        time.sleep(search_interval_min * 60)
+        time.sleep(st.session_state.search_interval_min * 60)
         with st.spinner('뉴스 검색중...'):
             news_df_ = get_google_outage_news(keyword_)
             # st.write(news_df_)
@@ -350,13 +344,13 @@ service_code_name = st.sidebar.selectbox(
 )
 
 
-# another_service = st.sidebar.text_input("또는 서비스명 입력", value=st.session_state.another_service_text)
-
 search_hour = st.sidebar.number_input('최근 몇시간의 뉴스를 검색할까요?', value=1, format='%d')
 
 and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드", options=['outage', 'blackout', 'failure'], default=['outage'])
 
-search_interval_min = st.sidebar.number_input('새로고침 주기(분)', value=1, format='%d')
+st.session_state.search_interval_min = st.sidebar.number_input('새로고침 주기(분)',
+                                                               value=st.session_state.search_interval_min,
+                                                               format='%d')
 
 st.sidebar.divider()
 st.sidebar.write('❓ https://downdetector.com')
@@ -387,7 +381,6 @@ if uploaded_file is not None:
 if service_code_name:
     # 선택된 서비스 인덱스를 세션정보에 저장.
     st.session_state.service_code_name_index = st.session_state.companies_list.index(service_code_name)
-    st.session_state.another_service_text = None
 
     # 본문 화면 구성
     title_placeholder = st.empty()
@@ -438,7 +431,7 @@ timer_placeholder = st.sidebar.empty()
 # 카운트다운 초 계산
 if service_code_name:
     if st.session_state.search_interval_timer_cache <= 0:
-        st.session_state.search_interval_timer_cache = search_interval_min * 60
+        st.session_state.search_interval_timer_cache = st.session_state.search_interval_min * 60
 
     # 타이머 실행
     while st.session_state.search_interval_timer_cache >= 0:
