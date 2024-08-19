@@ -2,7 +2,7 @@
 # pip install webdriver-manager
 # pip install undetected-chromedriver
 # pip install selenium_stealth
-import streamlit
+import streamlit as st
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 logging.info('CHROME_DRIVER 초기화 시작')
 
 
-# @streamlit.cache_resource
+@st.cache_resource
 def get_driver():
     logging.info(f'{sys.platform=}')
     if sys.platform == 'win32' or sys.platform == 'darwin':
@@ -107,6 +107,7 @@ def get_impact_order(impact_class):
 
 
 # 다운디텍터 크롤링
+@st.cache_data
 def get_downdetector_df(url, area, service_name=None):
     global CHROME_DRIVER
 
@@ -136,7 +137,11 @@ def get_downdetector_df(url, area, service_name=None):
             return None
 
     # 페이지 로딩 대기
-    WebDriverWait(CHROME_DRIVER, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
+    try:
+        WebDriverWait(CHROME_DRIVER, 60).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
+    except Exception as e:
+        logging.error(f"{e}")
+        logging.error('최대 시간 동안 기다려도 페이지 로딩에 실패한 경우 - 그대로 처리한다.')
 
     logging.info(f'다운디텍터 크롤링 완료 - {url} {area}')
 
@@ -158,7 +163,7 @@ def get_downdetector_df(url, area, service_name=None):
             data.append({NAME: name, VALUES: data_values, CLASS: impact_class})
 
         except Exception as e:
-            logging.error(f"Error extracting data for a service: {e}\n{url} - {area}")
+            logging.error(f"Error extracting data for a service: {e}\n{url} - {area} - {service}")
 
     # 브라우저 종료
     # CHROME_DRIVER.quit()

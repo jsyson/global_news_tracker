@@ -40,38 +40,39 @@ DEFAULT_COMPANIES_SET_DICT = {
 
         'Gmail',
         'Google',
-        'Google Calendar',
+        # 'Google Calendar',
         'Google Cloud',
         'Google Drive',
         'Google Duo',
         'Google Maps',
         'Google Meet',
         'Google Play',
-        'Google Public DNS',
+        # 'Google Public DNS',
         'Google Workspace',
 
         'iCloud',
         'Instagram',
         'Line',
         'Microsoft 365',
-        'Minecraft',
+        # 'Minecraft',
         'Netflix',
         'OpenAI',
-        'Paramount+',
+        # 'Paramount+',
         'Paypal',
-        'Roblox',
-        'Snapchat',
-        'Spotify',
+        # 'Roblox',
+        # 'Snapchat',
+        # 'Spotify',
         'Starlink',
         'T-Mobile',
         'TikTok',
-        'Twitch',
+        # 'Twitch',
         'Verizon',
-        'Whatsapp',
+        # 'Whatsapp',
         'X (Twitter)',
         'Yahoo',
         'Yahoo Mail',
         'Youtube',
+        # 'Zoom',
     },
 
     'JP': {
@@ -86,14 +87,14 @@ DEFAULT_COMPANIES_SET_DICT = {
 
         'Gmail',
         'Google',
-        'Google Calendar',
+        # 'Google Calendar',
         'Google Cloud',
         'Google Drive',
         'Google Duo',
         'Google Maps',
         'Google Meet',
         'Google Play',
-        'Google Public DNS',
+        # 'Google Public DNS',
         'Google Workspace',
 
         'iCloud',
@@ -107,7 +108,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'OpenAI',
         'SoftBank',
         'TikTok',
-        'Whatsapp',
+        # 'Whatsapp',
         'X (Twitter)',
         'Yahoo',
         'Yahoo Mail',
@@ -161,7 +162,7 @@ def get_service_chart_df_by_url_list(area):
         time.sleep(1)  # guard time
 
     if len(df_list) == 0:
-        logging.info(f'===== {area} 전체 크롤링 실패!!! =====')
+        logging.error(f'===== {area} 전체 크롤링 실패!!! =====')
         return None
 
     total_df = (pd.concat(df_list, ignore_index=True)
@@ -210,7 +211,10 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
         if row[get_downdetector_web.NAME].upper() == service_name.upper() \
                 and row[get_downdetector_web.AREA].upper() == area.upper():  # 대소문자 구분 없이 이름/지역 일치 찾음.
             # 서비스를 찾으면 클래스, 리포트 리스트, 지도를 리턴함.
-            data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
+            if row[get_downdetector_web.VALUES] is None:
+                data_values = None
+            else:
+                data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
             return row[get_downdetector_web.CLASS], data_values, None
 
     # 서비스를 못찾았을 경우
@@ -235,6 +239,7 @@ def get_current_alarm_service_list(area):
 def init_status_df():
     logging.info('status_df_dict 초기화!')
     st.session_state.status_df_dict = dict()
+    get_downdetector_web.get_downdetector_df.clear()
 
 
 def get_status_color(name, status):
@@ -246,12 +251,12 @@ def get_status_color(name, status):
         color = 'orange'
         color_code = ORANGE
         icon = '☁︎'
-        st.toast(f'**{name}** 서비스 문제 발생!', icon="🔔")
+        # st.toast(f'**{name}** 서비스 문제 발생!', icon="🔔")
     else:  # get_downdetector_web.DANGER:
         color = 'red'
         color_code = RED
         icon = '☠︎'
-        st.toast(f'**{name}** 서비스 중대 문제 발생!', icon="🚨")
+        st.toast(f'**{name}** 서비스 문제 발생!', icon="🚨")
 
     return color, color_code, icon
 
