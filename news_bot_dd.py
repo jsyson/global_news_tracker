@@ -304,8 +304,9 @@ for area in st.session_state.companies_list_dict:
 total_services_list = list(set(total_services_list))
 total_services_list.sort(key=lambda x: x.lower())
 
-if 'selected_service_name' in st.session_state and st.session_state.selected_service_name is not None \
-        and st.session_state.selected_service_name in total_services_list:
+if 'selected_service_name' in st.session_state and st.session_state.selected_service_name is not None:
+    if st.session_state.selected_service_name not in total_services_list:
+        total_services_list.append(st.session_state.selected_service_name)
     item_index = total_services_list.index(st.session_state.selected_service_name)
 else:
     item_index = None
