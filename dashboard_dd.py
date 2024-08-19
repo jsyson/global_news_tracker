@@ -126,10 +126,10 @@ def display_config_tab(area):
 
 
 # # # # # # # # # # # # # # # # # # # #
-
-
 # 웹 페이지 구성
-st.set_page_config(layout="wide")
+# # # # # # # # # # # # # # # # # # # #
+
+
 # st.title('Global IT Dashboard')
 
 
@@ -145,8 +145,8 @@ st.session_state.dashboard_refresh_timer = st.sidebar.number_input('새로고침
 
 # 메인 페이지
 st.subheader('Global Service Status')
-dashboard_us_tab, dashboard_jp_tab, config_us_tab, config_jp_tab = st.tabs(["대시보드(US)", "대시보드(JP)",
-                                                                            "감시설정(US)", "감시설정(JP)"])
+dashboard_us_tab, dashboard_jp_tab, config_us_tab, config_jp_tab = st.tabs(["미국", "일본",
+                                                                            "감시설정-미국", "감시설정-일본"])
 
 
 # # # # # # # # # #

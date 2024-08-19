@@ -13,6 +13,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 from selenium_stealth import stealth
 import pandas as pd
+import sys
 import logging
 import matplotlib.pyplot as plt
 
@@ -38,14 +39,32 @@ logging.basicConfig(level=logging.INFO)
 logging.info('CHROME_DRIVER 초기화 시작')
 
 
-@streamlit.cache_resource
+# @streamlit.cache_resource
 def get_driver():
-    return webdriver.Chrome(
-        service=ChromeService(
-            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
-        ),
-        options=options,
-    )
+    logging.info(f'{sys.platform=}')
+    if sys.platform == 'win32' or sys.platform == 'darwin':
+        # 윈도우 또는 맥일 경우
+        new_driver = webdriver.Chrome(
+            service=ChromeService(ChromeDriverManager().install()),
+            options=options
+        )
+    else:
+        # 리눅스 서버일 경우
+        new_driver = webdriver.Chrome(
+            service=ChromeService(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()),
+            options=options,
+        )
+
+    stealth(new_driver,
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+            )
+
+    return new_driver
 
 
 # Selenium 설정
@@ -66,22 +85,8 @@ options.add_argument('--allow-running-insecure-content')
 # 드라이버 초기화
 # # # # # # # # # #
 
-# 윈도우에서 테스트하기 위한 드라이버
-# CHROME_DRIVER = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
 
-# 스트림릿 허브에 푸시하기 전에 아래 코드로 교체
 CHROME_DRIVER = get_driver()
-
-
-stealth(CHROME_DRIVER,
-        languages=["en-US", "en"],
-        vendor="Google Inc.",
-        platform="Win32",
-        webgl_vendor="Intel Inc.",
-        renderer="Intel Iris OpenGL Engine",
-        fix_hairline=True,
-        )
-
 logging.info('CHROME_DRIVER 초기화 완료')
 
 
@@ -110,7 +115,7 @@ def get_downdetector_df(url, area, service_name=None):
     CHROME_DRIVER.get(url)
 
     # 페이지 로딩 대기
-    WebDriverWait(CHROME_DRIVER, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
+    WebDriverWait(CHROME_DRIVER, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
 
     logging.info(f'다운디텍터 크롤링 완료 - {url} {area}')
 
@@ -135,7 +140,7 @@ def get_downdetector_df(url, area, service_name=None):
             logging.error(f"Error extracting data for a service: {e}\n{url} - {area}")
 
     # 브라우저 종료
-    # driver.quit()
+    # CHROME_DRIVER.quit()
 
     df_ = pd.DataFrame(data)
     df_sorted = df_.sort_values(by=CLASS, key=lambda x: x.map(get_impact_order), ascending=False)
@@ -143,7 +148,7 @@ def get_downdetector_df(url, area, service_name=None):
     df_sorted[AREA] = area  # 지역 컬럼 추가
 
     # for debug
-    logging.info(str(df_sorted))
+    logging.debug(str(df_sorted))
 
     # log_str = f'\n---------- {url} ----------\n'
     # for i, row in df_sorted.iterrows():
@@ -178,5 +183,5 @@ if __name__ == '__main__':
     df = get_downdetector_df(url='https://downdetector.com/telecom/', area='US')
     df_sample = df.head(5).reset_index(drop=True)
     make_plot(df_sample)
-    CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.
+    # CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.
 

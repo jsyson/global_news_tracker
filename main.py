@@ -7,6 +7,9 @@ import config
 logging.basicConfig(level=logging.INFO)
 
 
+st.set_page_config(layout="wide")
+
+
 # 세션 정보 초기화(공용)
 if 'selected_service_name' not in st.session_state:
     st.session_state.selected_service_name = None
@@ -65,7 +68,7 @@ if 'search_interval_min' not in st.session_state:
 
 pg = st.navigation([
     st.Page(config.DASHBOARD_PAGE, title='Dashboard', icon="🚥", default=True),
-    st.Page(config.NEWSBOT_PAGE, title="News Tracker", icon='💬', url_path='news_tracker'),
+    st.Page(config.NEWSBOT_PAGE, title="News Tracker", icon='💬')  # , url_path='news_tracker'),
 ])
 
 pg.run()

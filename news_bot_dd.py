@@ -287,7 +287,6 @@ def get_multiple(values_sr):
 # # # # # # # # # #
 
 
-st.set_page_config(layout="wide")
 # st.title('뉴스 검색 봇')
 
 
