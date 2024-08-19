@@ -9,7 +9,7 @@ google-cloud-translate==2.0.1
 lxml
 
 matplotlib~=3.9.2
-selenium~=4.23.1
+selenium
 webdriver-manager
 selenium_stealth
 undetected-chromedriver
