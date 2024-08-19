@@ -61,9 +61,17 @@ options.add_argument('--ignore-certificate-errors')
 options.add_argument('--disable-web-security')
 options.add_argument('--allow-running-insecure-content')
 
-# 드라이버 설정
+
+# # # # # # # # # #
+# 드라이버 초기화
+# # # # # # # # # #
+
+# 윈도우에서 테스트하기 위한 드라이버
 # CHROME_DRIVER = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+
+# 스트림릿 허브에 푸시하기 전에 아래 코드로 교체
 CHROME_DRIVER = get_driver()
+
 
 stealth(CHROME_DRIVER,
         languages=["en-US", "en"],

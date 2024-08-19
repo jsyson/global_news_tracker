@@ -118,10 +118,10 @@ def display_config_tab(area):
             col = columns[idx % num_columns]  # 순서대로 컬럼에 아이템 배치
 
             if item in st.session_state.target_service_set_dict[area]:
-                if col.checkbox(item[:15], value=True, help=item, key=item + ' ' + area):
+                if col.checkbox(item[:12], value=True, help=item, key=item + ' ' + area):
                     st.session_state.target_service_set_dict[area].add(item)
             else:
-                if col.checkbox(item[:15], help=item, key=item + ' ' + area):
+                if col.checkbox(item[:12], help=item, key=item + ' ' + area):
                     st.session_state.target_service_set_dict[area].add(item)
 
 
