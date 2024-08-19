@@ -1,54 +1,61 @@
 import streamlit as st
 import logging
-import requests
-from bs4 import BeautifulSoup
-import pickle
 import config
 
 
 # 로깅 설정
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
-# # # # # # # # # # # # # # # # # # # #
-# 회사 목록 받아오기 (skip)
-# # # # # # # # # # # # # # # # # # # #
+# 세션 정보 초기화(공용)
+if 'selected_service_name' not in st.session_state:
+    st.session_state.selected_service_name = None
+
+if 'selected_area' not in st.session_state:
+    st.session_state.selected_area = None
+
+if "companies_list_dict" not in st.session_state:
+    st.session_state.companies_list_dict = config.pickle_load_cache_file(config.COMPANIES_LIST_FILE, dict)
 
 
-# if 'companies_loaded' not in st.session_state:
-#     st.session_state.companies_loaded = False
-#
-#
-# if not st.session_state.companies_loaded:
-#     logging.info('최초 접속이므로 회사 정보 웹로딩 시작...')
-#
-#     req = requests.Session()
-#     response = req.get('https://istheservicedown.com/companies',
-#                        headers={'User-Agent': 'Popular browser\'s user-agent'})
-#
-#     soup = BeautifulSoup(response.content, 'html.parser')
-#
-#     companies_html_list = soup.find_all('a', class_='b-lazy-bg')
-#     companies_list = []
-#
-#     for company in companies_html_list:
-#         code = company['href'].split('/')[-1]
-#         name = company.h3.text
-#         code_name = code + '/' + name
-#         logging.debug(code_name)
-#         companies_list.append(code_name)
-#
-#     logging.info('Total companies count:' + str(len(companies_list)))
-#
-#     # 파일 저장
-#     with open(config.COMPANIES_LIST_FILE, 'wb') as f_:
-#         pickle.dump(companies_list, f_)
-#         logging.info('회사 목록 파일 저장 완료')
-#
-#     st.session_state.companies_loaded = True
-#
-# else:
-#     logging.info('회사 정보 웹로딩 스킵!')
+# 세션 정보 초기화(대시보드)
+if 'status_df_dict' not in st.session_state:
+    st.session_state.status_df_dict = dict()
+
+if 'target_service_set_dict' not in st.session_state:
+    st.session_state.target_service_set_dict = config.DEFAULT_COMPANIES_SET_DICT
+
+if 'status_cache' not in st.session_state:
+    st.session_state.status_cache = dict()
+
+if 'dashboard_refresh_timer' not in st.session_state:
+    st.session_state.dashboard_refresh_timer = 5
+
+if 'refresh_timer_cache' not in st.session_state:
+    st.session_state.refresh_timer_cache = -1
+
+if 'num_dashboard_columns' not in st.session_state:
+    st.session_state.num_dashboard_columns = 5
+
+if 'display_chart' not in st.session_state:
+    st.session_state.display_chart = True
+
+
+# 세션 정보 초기화(뉴스)
+if "geolocations_dict" not in st.session_state:
+    st.session_state.geolocations_dict = config.pickle_load_cache_file(config.GEOLOC_CACHE_FILE, dict)
+
+if 'trans_text_list' not in st.session_state:
+    st.session_state.trans_text_list = config.pickle_load_cache_file(config.TRANS_CACHE_FILE, list)
+
+if "news_list" not in st.session_state:
+    st.session_state.news_list = []
+
+if 'search_interval_timer_cache' not in st.session_state:
+    st.session_state.search_interval_timer_cache = -1
+
+if 'search_interval_min' not in st.session_state:
+    st.session_state.search_interval_min = 5
 
 
 # # # # # # # # # # # # # # # # # # # #

@@ -8,12 +8,18 @@ import pandas as pd
 
 
 # 로깅 설정
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 # 파일명
 DASHBOARD_PAGE = 'dashboard_dd.py'
 NEWSBOT_PAGE = 'news_bot_dd.py'
+
+GEOLOC_CACHE_FILE = 'geolocation_cache.pkl'
+TRANS_CACHE_FILE = 'trans_cache.pkl'
+KEY_PATH = 'key.json'
+
+COMPANIES_LIST_FILE = 'companies_list_dd.pkl'
 
 
 # 색상 코드
@@ -22,86 +28,93 @@ ORANGE = '#FFCC66BB'
 RED = '#FF6666BB'
 
 
-COMPANIES_LIST_FILE = 'companies_list_dd.pkl'
+DEFAULT_COMPANIES_SET_DICT = {
+    'US': {
+        'Amazon',
+        'Amazon Web Services',
+        'AT&T',
+        'Cloudflare',
+        'Discord',
+        'Disney+',
+        'Facebook',
 
-DEFAULT_COMPANIES_SET = {
-    'Amazon',
-    'Amazon Web Services',
-    'AT&T',
-    'Cloudflare',
-    'Discord',
-    'Disney+',
-    'Facebook',
-    'Gmail',
-    'Google',
-    'Google Calendar',
-    'Google Drive',
-    'Google Duo',
-    'Google Maps',
-    'Google Play',
-    'Google Workspace',
-    'iCloud',
-    'Instagram',
-    'Line',
-    'Microsoft 365',
-    'Minecraft',
-    'Netflix',
-    'OpenAI',
-    'Paramount+',
-    'Paypal',
-    'Roblox',
-    'Snapchat',
-    'Spotify',
-    'Starlink',
-    'T-Mobile',
-    'TikTok',
-    'Twitch',
-    'Verizon',
-    'Whatsapp',
-    'X (Twitter)',
-    'Yahoo',
-    'Yahoo Mail',
-    'Youtube',
+        'Gmail',
+        'Google',
+        'Google Calendar',
+        'Google Cloud',
+        'Google Drive',
+        'Google Duo',
+        'Google Maps',
+        'Google Meet',
+        'Google Play',
+        'Google Public DNS',
+        'Google Workspace',
 
+        'iCloud',
+        'Instagram',
+        'Line',
+        'Microsoft 365',
+        'Minecraft',
+        'Netflix',
+        'OpenAI',
+        'Paramount+',
+        'Paypal',
+        'Roblox',
+        'Snapchat',
+        'Spotify',
+        'Starlink',
+        'T-Mobile',
+        'TikTok',
+        'Twitch',
+        'Verizon',
+        'Whatsapp',
+        'X (Twitter)',
+        'Yahoo',
+        'Yahoo Mail',
+        'Youtube',
+    },
+
+    'JP': {
+        'Akamai',
+        'Amazon',
+        'Amazon Web Services',
+        'App Store',
+        'Apple Store',
+        'Cloudflare',
+        'Dropbox',
+        'Facebook',
+
+        'Gmail',
+        'Google',
+        'Google Calendar',
+        'Google Cloud',
+        'Google Drive',
+        'Google Duo',
+        'Google Maps',
+        'Google Meet',
+        'Google Play',
+        'Google Public DNS',
+        'Google Workspace',
+
+        'iCloud',
+        'Instagram',
+        'Line',
+        'Microsoft 365',
+        'Microsoft Azure',
+        'Microsoft Teams',
+        'Netflix',
+        'NTT Docomo',
+        'OpenAI',
+        'SoftBank',
+        'TikTok',
+        'Whatsapp',
+        'X (Twitter)',
+        'Yahoo',
+        'Yahoo Mail',
+        'Youtube',
+        'Zoom',
+    }
 }
-
-# DEFAULT_COMPANIES_SET = {'apple-store/Apple Store',
-#                          # 'facebook-gaming/Facebook Gaming',
-#                          'microsoft-azure/Microsoft Azure',
-#                          'google-cloud/Google Cloud',
-#                          'instagram/Instagram',
-#                          'netflix/Netflix',
-#                          'twitch/Twitch',
-#                          # 'hbo-max/HBO Max',
-#                          'dropbox/Dropbox',
-#                          'facebook/Facebook',
-#                          'facebook-messenger/Facebook Messenger',
-#                          # 'snapchat/Snapchat',
-#                          'amazon-web-services-aws/Amazon Web Services',
-#                          'itunes/iTunes',
-#                          't-mobile/T-Mobile',
-#                          'amazon-prime-instant-video/Amazon Prime Video',
-#                          'disney-plus/Disney+',
-#                          'outlook-hotmail/Outlook.com',
-#                          'twitter/Twitter',
-#                          'discord/Discord',
-#                          'gmail/Gmail',
-#                          'zoom/Zoom',
-#                          'tiktok/TikTok',
-#                          'starlink/Starlink',
-#                          # 'yahoo-mail/Yahoo! Mail',
-#                          # 'slack/Slack',
-#                          'verizon/Verizon Wireless',
-#                          'telegram/Telegram',
-#                          # 'whatsapp-messenger/WhatsApp',
-#                          'cloudflare/Cloudflare',
-#                          'att/AT&T',
-#                          'office-365/Office 365',
-#                          'youtube/Youtube',
-#                          'microsoft-teams/Microsoft Teams',
-#                          'roblox/Roblox',
-#                          'skype/Skype'
-#                          }
 
 
 # # # # # # # # # # # # # # #
@@ -126,45 +139,68 @@ def pickle_load_cache_file(filename, default_type):
 # # # # # # # # # # # # # # #
 
 
-def get_service_chart_mapdf(service_name=None, need_map=False):
-    if 'status_df' not in st.session_state:
-        st.session_state.status_df = None
+def get_service_chart_df_by_url_list(area):
+    logging.info(f'===== {area} 전체 크롤링 시작 =====')
 
+    if area.upper() == 'JP':
+        postfix = 'jp'
+    else:
+        postfix = 'com'
+
+    url_list = [f'https://downdetector.{postfix}/',
+                f'https://downdetector.{postfix}/telecom/',
+                f'https://downdetector.{postfix}/online-services/',
+                f'https://downdetector.{postfix}/social-media/'
+                ]
+
+    df_list = []
+    for url_item in url_list:
+        df_ = get_downdetector_web.get_downdetector_df(url=url_item, area=area)
+        df_list.append(df_)
+        time.sleep(0.1)  # guard time
+
+    total_df = (pd.concat(df_list, ignore_index=True)
+                .drop_duplicates(subset=get_downdetector_web.NAME, keep='first'))
+
+    logging.info(f'===== {area} 전체 크롤링 및 df 변환 완료 =====')
+    return total_df
+
+
+def refresh_status_and_save_companies(area):
+    # 상태 받아오기
+    st.session_state.status_df_dict[area] = get_service_chart_df_by_url_list(area)
+
+    # 회사 목록 파일 업데이트
+    new_list = list(st.session_state.status_df_dict[area][get_downdetector_web.NAME])
+
+    # 기존 회사 목록 불러오기
+    companies_list = pickle_load_cache_file(COMPANIES_LIST_FILE, dict)
+
+    # 신규 목록 합치기
+    companies_list[area] = list(set(companies_list.get(area, []) + new_list))
+    companies_list[area].sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
+
+    logging.info(f'{area} 회사 목록:\n' + str(companies_list[area]))
+    logging.info(f'{area} Total companies count: ' + str(len(companies_list[area])))
+
+    # 합쳐진 리스트를 다시 파일로 저장
+    with open(COMPANIES_LIST_FILE, 'wb') as f_:
+        pickle.dump(companies_list, f_)
+        logging.info(f'{area} 회사 목록 업데이트 & 파일 저장 완료')
+
+
+def get_service_chart_mapdf(area, service_name=None, need_map=False):
     # 최초 로딩 시 또는 service_name None일 경우
-    if st.session_state.status_df is None or service_name is None:
-        df1 = get_downdetector_web.get_downdetector_df()  # 메인페이지를 크롤링해온다.
-        time.sleep(0.1)
-        df2 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/telecom/')
-        time.sleep(0.1)
-        df3 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/online-services/')
-        time.sleep(0.1)
-        df4 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/social-media/')
+    if st.session_state.status_df_dict.get(area) is None or service_name is None:
+        refresh_status_and_save_companies(area)
 
-        st.session_state.status_df = (pd.concat([df1, df2, df3, df4], ignore_index=True)
-                                      .drop_duplicates(subset=get_downdetector_web.NAME, keep='first'))
-
-        new_list = list(st.session_state.status_df[get_downdetector_web.NAME])
-
-        # 기존 회사 목록 불러오기
-        old_list = pickle_load_cache_file(COMPANIES_LIST_FILE, list)
-
-        st.session_state.companies_list = list(set(new_list + old_list))
-        st.session_state.companies_list.sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
-
-        logging.info('회사 목록:\n' + str(st.session_state.companies_list))
-        logging.info('Total companies count: ' + str(len(st.session_state.companies_list)))
-
-        # 합쳐진 리스트를 다시 파일로 저장
-        with open(COMPANIES_LIST_FILE, 'wb') as f_:
-            pickle.dump(st.session_state.companies_list, f_)
-            logging.info('회사 목록 파일 저장 완료')
-
-    # 메인페이지 크롤링 목적의 호출
+    # 메인페이지 크롤링 목적의 호출일 경우
     if service_name is None:
         return None, None, None
 
-    for i, row in st.session_state.status_df.iterrows():
-        if row[get_downdetector_web.NAME].upper() == service_name.upper():  # 대소문자 구분 없이 일치하는 이름을 찾는다.
+    for i, row in st.session_state.status_df_dict[area].iterrows():
+        if row[get_downdetector_web.NAME].upper() == service_name.upper() \
+                and row[get_downdetector_web.AREA].upper() == area.upper():  # 대소문자 구분 없이 이름/지역 일치 찾음.
             # 서비스를 찾으면 클래스, 리포트 리스트, 지도를 리턴함.
             data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
             return row[get_downdetector_web.CLASS], data_values, None
@@ -174,16 +210,23 @@ def get_service_chart_mapdf(service_name=None, need_map=False):
 
 
 # 현재 알람이 뜬 서비스 목록을 가져오는 함수
-def get_current_alarm_service_list():
-    get_service_chart_mapdf()  # 강제 크롤링 1회 수행.
+def get_current_alarm_service_list(area):
+    if st.session_state.status_df_dict.get(area) is None:
+        get_service_chart_mapdf(area)  # 현재 값이 없을 경우 강제 크롤링 1회 수행.
 
     alarm_list = []
 
-    for i, row in st.session_state.status_df.iterrows():
-        if row[get_downdetector_web.CLASS] == get_downdetector_web.DANGER:  # Red 알람
+    for i, row in st.session_state.status_df_dict[area].iterrows():
+        if row[get_downdetector_web.CLASS] == get_downdetector_web.DANGER \
+                and row[get_downdetector_web.AREA].upper() == area.upper():  # 해당 지역의 Red 알람
             alarm_list.append(row[get_downdetector_web.NAME])
 
     return alarm_list
+
+
+def init_status_df():
+    logging.info('status_df_dict 초기화!')
+    st.session_state.status_df_dict = dict()
 
 
 def get_status_color(name, status):

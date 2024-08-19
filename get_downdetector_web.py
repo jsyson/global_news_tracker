@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 NAME = 'Name'
 VALUES = "Values"
 CLASS = "Class"
+AREA = "Area"
 
 # 클래스명
 DANGER = "danger"
@@ -27,7 +28,7 @@ WARNING = 'warning'
 SUCCESS = 'success'
 
 # 로깅 설정
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 # # # # # # # # # # # # # # # # # # # #
@@ -77,8 +78,8 @@ def get_impact_order(impact_class):
 
 
 # 다운디텍터 크롤링
-def get_downdetector_df(url='https://downdetector.com', service_name=None):
-    logging.info('다운디텍터 크롤링 시작')
+def get_downdetector_df(url, area, service_name=None):
+    logging.info(f'다운디텍터 크롤링 시작 - {url} {area}')
 
     # if service_name:
     # https://downdetector.com/status/{service_name}/
@@ -88,7 +89,7 @@ def get_downdetector_df(url='https://downdetector.com', service_name=None):
     # 페이지 로딩 대기
     WebDriverWait(CHROME_DRIVER, 10).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
 
-    logging.info('다운디텍터 크롤링 완료')
+    logging.info(f'다운디텍터 크롤링 완료 - {url} {area}')
 
     # 서비스명, data-values, 영향도 클래스 추출
     services = CHROME_DRIVER.find_elements(By.CSS_SELECTOR, ".caption")
@@ -97,19 +98,18 @@ def get_downdetector_df(url='https://downdetector.com', service_name=None):
     for service in services:
         try:
             name = service.find_element(By.TAG_NAME, "h5").text
-            print(name)
-
             data_values = service.find_element(By.CLASS_NAME, "sparkline").get_attribute("data-values")
-            print(data_values)
-
             sparkline_classes = service.find_element(By.CLASS_NAME, "sparkline").get_attribute("class").split()
-            print(sparkline_classes)
-            impact_class = sparkline_classes[0]
+            impact_class = SUCCESS
+            for item in sparkline_classes:
+                if item in [DANGER, WARNING, SUCCESS]:
+                    impact_class = item
+                    break
 
             data.append({NAME: name, VALUES: data_values, CLASS: impact_class})
-            print()
+
         except Exception as e:
-            print(f"Error extracting data for a service: {e}")
+            logging.error(f"Error extracting data for a service: {e}\n{url} - {area}")
 
     # 브라우저 종료
     # driver.quit()
@@ -117,15 +117,16 @@ def get_downdetector_df(url='https://downdetector.com', service_name=None):
     df_ = pd.DataFrame(data)
     df_sorted = df_.sort_values(by=CLASS, key=lambda x: x.map(get_impact_order), ascending=False)
     df_sorted = df_sorted.reset_index(drop=True)
+    df_sorted[AREA] = area  # 지역 컬럼 추가
 
     # for debug
-    print(df_sorted)
+    logging.info(str(df_sorted))
 
-    log_str = '\n----------'
-    for i, row in df_sorted.iterrows():
-        log_str += row[NAME] + '\t' + row[CLASS] + '\t' + row[VALUES] + '\n'
-    log_str += '----------\n'
-    logging.info(log_str)
+    # log_str = f'\n---------- {url} ----------\n'
+    # for i, row in df_sorted.iterrows():
+    #     log_str += f'{row[NAME]}\t{row[AREA]}\t{row[CLASS]}\t{row[VALUES]}\n'
+    # log_str += '------------------------------\n\n'
+    # logging.info(log_str)
 
     return df_sorted
 
@@ -151,7 +152,7 @@ def make_plot(df_):
 
 if __name__ == '__main__':
     # test code
-    df = get_downdetector_df(url='https://downdetector.com/telecom/')
+    df = get_downdetector_df(url='https://downdetector.com/telecom/', area='US')
     df_sample = df.head(5).reset_index(drop=True)
     make_plot(df_sample)
     CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.

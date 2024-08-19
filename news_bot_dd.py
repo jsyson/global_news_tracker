@@ -13,52 +13,14 @@ import streamlit as st
 from google.cloud import translate_v2 as translate  # pip install google-cloud-translate==2.0.1
 from google.oauth2 import service_account
 import config
-import get_downdetector_web
+
 
 # 로깅 설정
-logging.basicConfig(level=logging.DEBUG)
-
-GEOLOC_CACHE_FILE = 'geolocation_cache.pkl'
-TRANS_CACHE_FILE = 'trans_cache.pkl'
-KEY_PATH = 'key.json'
-
-
-# 스레드 풀 실행자 초기화
-
-# executor = concurrent.futures.ThreadPoolExecutor()
+logging.basicConfig(level=logging.INFO)
 
 
 # Set verbose if needed
 # globals.set_debug(True)
-
-
-# # # # # # # # # # # #
-# 세션 캐시 처리
-# # # # # # # # # # # #
-
-
-if "geolocations_dict" not in st.session_state:
-    st.session_state.geolocations_dict = config.pickle_load_cache_file(GEOLOC_CACHE_FILE, dict)
-
-if 'trans_text_list' not in st.session_state:
-    st.session_state.trans_text_list = config.pickle_load_cache_file(TRANS_CACHE_FILE, list)
-
-if "news_list" not in st.session_state:
-    st.session_state.news_list = []
-
-if 'service_code_name_index' not in st.session_state:
-    st.session_state.service_code_name_index = None
-
-if "companies_list" not in st.session_state:
-    # 최초 - 파일이 없거나 리스트가 비어있을 경우
-    config.get_service_chart_mapdf(None)
-    st.session_state.companies_list = config.pickle_load_cache_file(config.COMPANIES_LIST_FILE, list)
-
-if 'search_interval_timer_cache' not in st.session_state:
-    st.session_state.search_interval_timer_cache = -1
-
-if 'search_interval_min' not in st.session_state:
-    st.session_state.search_interval_min = 5
 
 
 # # # # # # # # # #
@@ -198,10 +160,10 @@ def translate_eng_to_kor(text):
         return cache_text  # 캐시힛!
 
     # 캐시에 없으면 구글 api로 번역을 한다.
-    if not os.path.exists(KEY_PATH):
+    if not os.path.exists(config.KEY_PATH):
         return ''
 
-    credential_trans = service_account.Credentials.from_service_account_file(KEY_PATH)
+    credential_trans = service_account.Credentials.from_service_account_file(config.KEY_PATH)
     translate_client = translate.Client(credentials=credential_trans)
 
     result = translate_client.translate(text, target_language='ko')
@@ -220,7 +182,7 @@ def save_trans_cache(eng_text, kor_text):
 
     st.session_state.trans_text_list.append((eng_text, kor_text))  # 번역 튜플을 리스트에 삽입
     # 캐시 파일에 저장
-    with open(TRANS_CACHE_FILE, 'wb') as f_:
+    with open(config.TRANS_CACHE_FILE, 'wb') as f_:
         pickle.dump(st.session_state.trans_text_list, f_)
         logging.info('번역 캐시 파일 업데이트 완료')
 
@@ -266,7 +228,7 @@ def get_korean_time():
 def save_loc_cache(loc, lat, lon):
     st.session_state.geolocations_dict[loc] = {'lat': lat, 'lon': lon}
     # 새로운 위경도 정보를 캐시 파일에 저장
-    with open(GEOLOC_CACHE_FILE, 'wb') as f_:
+    with open(config.GEOLOC_CACHE_FILE, 'wb') as f_:
         pickle.dump(st.session_state.geolocations_dict, f_)
         logging.info('위경도 캐시 파일 업데이트 완료')
 
@@ -336,10 +298,22 @@ st.set_page_config(layout="wide")
 
 # st.sidebar.header('Global Service News Tracker')
 
+total_services_list = []
+for area in st.session_state.companies_list_dict:
+    total_services_list += st.session_state.companies_list_dict[area]
+
+total_services_list = list(set(total_services_list))
+total_services_list.sort(key=lambda x: x.lower())
+
+if 'selected_service_name' in st.session_state and st.session_state.selected_service_name is not None:
+    item_index = total_services_list.index(st.session_state.selected_service_name)
+else:
+    item_index = None
+
 service_code_name = st.sidebar.selectbox(
     "검색을 원하는 서비스는?",
-    st.session_state.companies_list,
-    index=st.session_state.service_code_name_index,
+    total_services_list,
+    index=item_index,
     placeholder="서비스 이름 선택...",
 )
 
@@ -356,7 +330,7 @@ st.sidebar.divider()
 st.sidebar.write('❓ https://downdetector.com')
 
 
-if not os.path.exists(KEY_PATH):
+if not os.path.exists(config.KEY_PATH):
     uploaded_file = st.sidebar.file_uploader('API Key File', type=['json'], accept_multiple_files=False)
 else:
     logging.info('API key 파일은 로컬 저장된 파일 사용합니다.')
@@ -366,7 +340,7 @@ else:
 # key json 파일 업로드 처리
 if uploaded_file is not None:
     # 파일을 로컬에 저장
-    with open(KEY_PATH, "wb") as file:
+    with open(config.KEY_PATH, "wb") as file:
         file.write(uploaded_file.getbuffer())
 
     st.toast(f"API key file has been saved successfully!")
@@ -379,9 +353,6 @@ if uploaded_file is not None:
 
 # 서비스 선택시 처리
 if service_code_name:
-    # 선택된 서비스 인덱스를 세션정보에 저장.
-    st.session_state.service_code_name_index = st.session_state.companies_list.index(service_code_name)
-
     # 본문 화면 구성
     title_placeholder = st.empty()
     col1, col2 = st.columns(2)
@@ -391,7 +362,8 @@ if service_code_name:
     col2_placeholder = col2.empty()
 
     with st.spinner('서비스 상태 조회중...'):
-        status, report_list, _ = config.get_service_chart_mapdf(service_code_name)
+        status, report_list, _ = config.get_service_chart_mapdf(area=st.session_state.selected_area,
+                                                                service_name=service_code_name)
 
         if status is None:
             with title_placeholder.container():
@@ -448,5 +420,5 @@ if service_code_name:
     timer_placeholder.markdown("⏰ 카운트다운 완료! 서비스 상태 재검색!")
 
     logging.info('재검색!!!')
-    config.get_service_chart_mapdf(None)  # 서비스 상태 크롤링
+    config.init_status_df()  # 서비스 상태 초기화
     st.rerun()
