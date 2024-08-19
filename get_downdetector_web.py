@@ -169,6 +169,11 @@ def get_downdetector_df(url, area, service_name=None):
     # CHROME_DRIVER.quit()
 
     df_ = pd.DataFrame(data)
+
+    # 크롤링 실패 또는 비정상일 경우 None 리턴.
+    if df_ is None or len(df_) == 0:
+        return None
+
     df_sorted = df_.sort_values(by=CLASS, key=lambda x: x.map(get_impact_order), ascending=False)
     df_sorted = df_sorted.reset_index(drop=True)
     df_sorted[AREA] = area  # 지역 컬럼 추가

@@ -84,6 +84,9 @@ def display_dashboard(area):
                     chart_data = pd.DataFrame([0] * 96, columns=["Report Count"])
                     st.line_chart(chart_data, color=color_code, height=80)
 
+    with st.expander('Raw Data'):
+        st.write(st.session_state.status_df_dict[area])
+
     logging.info(f'{area} 대시보드 구성 완료.\n')
 
 

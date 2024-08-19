@@ -183,18 +183,19 @@ def refresh_status_and_save_companies(area):
     new_list = list(st.session_state.status_df_dict[area][get_downdetector_web.NAME])
 
     # 기존 회사 목록 불러오기
-    companies_list = pickle_load_cache_file(COMPANIES_LIST_FILE, dict)
+    # companies_list = pickle_load_cache_file(COMPANIES_LIST_FILE, dict)
 
     # 신규 목록 합치기
-    companies_list[area] = list(set(companies_list.get(area, []) + new_list))
-    companies_list[area].sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
+    st.session_state.companies_list_dict[area] = list(set(st.session_state.companies_list_dict.get(area, [])
+                                                          + new_list))
+    st.session_state.companies_list_dict[area].sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
 
-    logging.info(f'{area} 회사 목록:\n' + str(companies_list[area]))
-    logging.info(f'{area} Total companies count: ' + str(len(companies_list[area])))
+    logging.info(f'{area} 회사 목록:\n' + str(st.session_state.companies_list_dict[area]))
+    logging.info(f'{area} Total companies count: ' + str(len(st.session_state.companies_list_dict[area])))
 
     # 합쳐진 리스트를 다시 파일로 저장
     with open(COMPANIES_LIST_FILE, 'wb') as f_:
-        pickle.dump(companies_list, f_)
+        pickle.dump(st.session_state.companies_list_dict, f_)
         logging.info(f'{area} 회사 목록 업데이트 & 파일 저장 완료')
 
 
@@ -256,7 +257,7 @@ def get_status_color(name, status):
         color = 'red'
         color_code = RED
         icon = '☠︎'
-        st.toast(f'**{name}** 서비스 문제 발생!', icon="🚨")
+        # st.toast(f'**{name}** 서비스 문제 발생!', icon="🚨")
 
     return color, color_code, icon
 

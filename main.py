@@ -2,14 +2,14 @@ import streamlit as st
 import logging
 
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-
-
-st.set_page_config(layout="wide")
+# st.set_page_config(layout="wide")
 
 
 import config
+
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
 
 
 # 세션 정보 초기화(공용)
