@@ -227,8 +227,11 @@ def get_current_alarm_service_list(area):
     if st.session_state.status_df_dict.get(area) is None:
         get_service_chart_mapdf(area)  # 현재 값이 없을 경우 강제 크롤링 1회 수행.
 
-    alarm_list = []
+    if st.session_state.status_df_dict.get(area) is None:
+        # 크롤링에 실패했을 경우.
+        return []
 
+    alarm_list = []
     for i, row in st.session_state.status_df_dict[area].iterrows():
         if row[get_downdetector_web.CLASS] == get_downdetector_web.DANGER \
                 and row[get_downdetector_web.AREA].upper() == area.upper():  # 해당 지역의 Red 알람

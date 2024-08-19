@@ -124,6 +124,9 @@ def get_downdetector_df(url, area, service_name=None):
 
         logging.info('CHROME_DRIVER 초기화 시작')
         CHROME_DRIVER.quit()
+
+        get_driver.clear()  # 캐시 삭제
+
         CHROME_DRIVER = get_driver()
         logging.info('CHROME_DRIVER 초기화 완료')
 
