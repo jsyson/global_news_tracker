@@ -2,7 +2,7 @@
 # pip install webdriver-manager
 # pip install undetected-chromedriver
 # pip install selenium_stealth
-
+import streamlit
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 from selenium_stealth import stealth
 import pandas as pd
 import logging
@@ -33,12 +34,24 @@ logging.basicConfig(level=logging.INFO)
 
 # # # # # # # # # # # # # # # # # # # #
 
+
 logging.info('CHROME_DRIVER 초기화 시작')
+
+
+@streamlit.cache_resource
+def get_driver():
+    return webdriver.Chrome(
+        service=ChromeService(
+            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
+        ),
+        options=options,
+    )
+
 
 # Selenium 설정
 options = Options()
-# options.add_argument("--headless")
 options.add_argument("start-maximized")
+options.add_argument("--disable-gpu")
 options.add_argument("--headless")
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
@@ -49,7 +62,8 @@ options.add_argument('--disable-web-security')
 options.add_argument('--allow-running-insecure-content')
 
 # 드라이버 설정
-CHROME_DRIVER = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+# CHROME_DRIVER = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
+CHROME_DRIVER = get_driver()
 
 stealth(CHROME_DRIVER,
         languages=["en-US", "en"],
@@ -61,6 +75,7 @@ stealth(CHROME_DRIVER,
         )
 
 logging.info('CHROME_DRIVER 초기화 완료')
+
 
 # # # # # # # # # # # # # # # # # # # #
 
