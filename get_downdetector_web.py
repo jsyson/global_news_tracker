@@ -77,11 +77,8 @@ def get_impact_order(impact_class):
 
 
 # 다운디텍터 크롤링
-def get_downdetector_df(service_name=None):
+def get_downdetector_df(url='https://downdetector.com', service_name=None):
     logging.info('다운디텍터 크롤링 시작')
-
-    # 웹페이지 로드
-    url = 'https://downdetector.com'
 
     # if service_name:
     # https://downdetector.com/status/{service_name}/
@@ -154,7 +151,7 @@ def make_plot(df_):
 
 if __name__ == '__main__':
     # test code
-    df = get_downdetector_df()
+    df = get_downdetector_df(url='https://downdetector.com/telecom/')
     df_sample = df.head(5).reset_index(drop=True)
     make_plot(df_sample)
     CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.

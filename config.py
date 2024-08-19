@@ -3,9 +3,7 @@ import logging
 import pickle
 import streamlit as st
 import get_downdetector_web
-import requests
-from bs4 import BeautifulSoup
-from io import StringIO
+import time
 import pandas as pd
 
 
@@ -28,37 +26,43 @@ COMPANIES_LIST_FILE = 'companies_list_dd.pkl'
 
 DEFAULT_COMPANIES_SET = {
     'Amazon',
-    'Apple Support',
+    'Amazon Web Services',
     'AT&T',
+    'Cloudflare',
     'Discord',
     'Disney+',
     'Facebook',
     'Gmail',
     'Google',
+    'Google Calendar',
+    'Google Drive',
     'Google Duo',
     'Google Maps',
+    'Google Play',
     'Google Workspace',
+    'iCloud',
     'Instagram',
     'Line',
+    'Microsoft 365',
+    'Minecraft',
     'Netflix',
     'OpenAI',
     'Paramount+',
+    'Paypal',
     'Roblox',
     'Snapchat',
+    'Spotify',
+    'Starlink',
     'T-Mobile',
     'TikTok',
+    'Twitch',
     'Verizon',
+    'Whatsapp',
     'X (Twitter)',
+    'Yahoo',
+    'Yahoo Mail',
     'Youtube',
-    # aws
-    # azure
-    # Google Cloud
-    # amazon prime
-    # zoom
-    # telegram
-    # MS Office 365
-    # teams
-    # skype
+
 }
 
 # DEFAULT_COMPANIES_SET = {'apple-store/Apple Store',
@@ -122,48 +126,23 @@ def pickle_load_cache_file(filename, default_type):
 # # # # # # # # # # # # # # #
 
 
-# def get_service_chart_mapdf(service_name, need_map=True):
-#     # url = "https://istheservicedown.com/problems/disney-plus"
-#     url = "https://istheservicedown.com/problems/" + service_name
-#
-#     req_ = requests.Session()
-#     response_ = req_.get(url,
-#                          headers={'User-Agent': 'Popular browser\'s user-agent', })
-#
-#     soup_ = BeautifulSoup(response_.content, 'html.parser')
-#
-#     # 상태
-#     status_ = soup_.find('p').text
-#
-#     # 차트 주소
-#     chart_url_ = soup_.find(id="chart-img")['src']
-#
-#     # map 주소
-#     map_df_ = None
-#
-#     # map 주소를 요청할때만 가져온다.
-#     if need_map:
-#         sub_url = soup_.find(title='Live Outage Map')['href']
-#         if sub_url:
-#             map_url_ = 'https://istheservicedown.com' + sub_url
-#
-#             response_ = req_.get(map_url_,
-#                                  headers={'User-Agent': 'Popular browser\'s user-agent', })
-#
-#             soup_ = BeautifulSoup(response_.content, 'html.parser')
-#             table_html = soup_.find('table', class_="table table-striped table-condensed")  # , id_='status-table')
-#             map_df_ = pd.read_html(StringIO(str(table_html)))[0]
-#
-#     return status_, chart_url_, map_df_
-
-
 def get_service_chart_mapdf(service_name=None, need_map=False):
     if 'status_df' not in st.session_state:
         st.session_state.status_df = None
 
     # 최초 로딩 시 또는 service_name None일 경우
     if st.session_state.status_df is None or service_name is None:
-        st.session_state.status_df = get_downdetector_web.get_downdetector_df()  # 메인페이지를 크롤링해온다.
+        df1 = get_downdetector_web.get_downdetector_df()  # 메인페이지를 크롤링해온다.
+        time.sleep(0.1)
+        df2 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/telecom/')
+        time.sleep(0.1)
+        df3 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/online-services/')
+        time.sleep(0.1)
+        df4 = get_downdetector_web.get_downdetector_df(url='https://downdetector.com/social-media/')
+
+        st.session_state.status_df = (pd.concat([df1, df2, df3, df4], ignore_index=True)
+                                      .drop_duplicates(subset=get_downdetector_web.NAME, keep='first'))
+
         new_list = list(st.session_state.status_df[get_downdetector_web.NAME])
 
         # 기존 회사 목록 불러오기
