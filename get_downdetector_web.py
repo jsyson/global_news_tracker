@@ -86,6 +86,7 @@ options.add_argument('--allow-running-insecure-content')
 # # # # # # # # # #
 
 
+logging.info('CHROME_DRIVER 초기화 시작')
 CHROME_DRIVER = get_driver()
 logging.info('CHROME_DRIVER 초기화 완료')
 
@@ -107,12 +108,32 @@ def get_impact_order(impact_class):
 
 # 다운디텍터 크롤링
 def get_downdetector_df(url, area, service_name=None):
+    global CHROME_DRIVER
+
     logging.info(f'다운디텍터 크롤링 시작 - {url} {area}')
 
     # if service_name:
     # https://downdetector.com/status/{service_name}/
 
-    CHROME_DRIVER.get(url)
+    try:
+        CHROME_DRIVER.get(url)
+    except Exception as e:
+        logging.error(f'크롬 get 에러 발생!!! - {url} - {area}')
+        logging.error(f"{e}")
+
+        logging.info('CHROME_DRIVER 초기화 시작')
+        CHROME_DRIVER.quit()
+        CHROME_DRIVER = get_driver()
+        logging.info('CHROME_DRIVER 초기화 완료')
+
+        logging.info('1회 재시도!!!')
+        try:
+            CHROME_DRIVER.get(url)
+        except Exception as e:
+            logging.error(f'재시도 get도 에러 발생!!! - {url} - {area}')
+            logging.error(f"{e}")
+            logging.error('None 리턴!')
+            return None
 
     # 페이지 로딩 대기
     WebDriverWait(CHROME_DRIVER, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
@@ -181,7 +202,8 @@ def make_plot(df_):
 if __name__ == '__main__':
     # test code
     df = get_downdetector_df(url='https://downdetector.com/telecom/', area='US')
-    df_sample = df.head(5).reset_index(drop=True)
-    make_plot(df_sample)
+    if df is not None:
+        df_sample = df.head(5).reset_index(drop=True)
+        make_plot(df_sample)
     # CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.
 

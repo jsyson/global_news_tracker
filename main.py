@@ -38,7 +38,7 @@ if 'refresh_timer_cache' not in st.session_state:
     st.session_state.refresh_timer_cache = -1
 
 if 'num_dashboard_columns' not in st.session_state:
-    st.session_state.num_dashboard_columns = 5
+    st.session_state.num_dashboard_columns = 8
 
 if 'display_chart' not in st.session_state:
     st.session_state.display_chart = True

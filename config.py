@@ -156,8 +156,13 @@ def get_service_chart_df_by_url_list(area):
     df_list = []
     for url_item in url_list:
         df_ = get_downdetector_web.get_downdetector_df(url=url_item, area=area)
-        df_list.append(df_)
-        time.sleep(0.1)  # guard time
+        if df_ is not None:
+            df_list.append(df_)
+        time.sleep(1)  # guard time
+
+    if len(df_list) == 0:
+        logging.info(f'===== {area} 전체 크롤링 실패!!! =====')
+        return None
 
     total_df = (pd.concat(df_list, ignore_index=True)
                 .drop_duplicates(subset=get_downdetector_web.NAME, keep='first'))
@@ -169,6 +174,9 @@ def get_service_chart_df_by_url_list(area):
 def refresh_status_and_save_companies(area):
     # 상태 받아오기
     st.session_state.status_df_dict[area] = get_service_chart_df_by_url_list(area)
+
+    if st.session_state.status_df_dict[area] is None:
+        return
 
     # 회사 목록 파일 업데이트
     new_list = list(st.session_state.status_df_dict[area][get_downdetector_web.NAME])
@@ -194,8 +202,8 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
     if st.session_state.status_df_dict.get(area) is None or service_name is None:
         refresh_status_and_save_companies(area)
 
-    # 메인페이지 크롤링 목적의 호출일 경우
-    if service_name is None:
+    # 크롤링에 실패했을 경우 또는 단순 크롤링 목적의 호출일 경우
+    if st.session_state.status_df_dict.get(area) is None or service_name is None:
         return None, None, None
 
     for i, row in st.session_state.status_df_dict[area].iterrows():
