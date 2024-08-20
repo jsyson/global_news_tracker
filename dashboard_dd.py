@@ -82,7 +82,7 @@ def display_dashboard(area):
 
                 if st.session_state.display_chart and chart_list:
                     # logging.info(f'{area} {item} 차트 출력함.')
-                    chart_data = pd.DataFrame(chart_list, columns=["Report Count"])
+                    chart_data = pd.DataFrame(chart_list, columns=["Report Count"]).dropna().astype('int')
                     st.line_chart(chart_data, color=color_code, height=80)
 
                 elif st.session_state.display_chart and chart_list is None:
