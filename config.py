@@ -146,6 +146,61 @@ DEFAULT_COMPANIES_SET_DICT = {
 
 
 # # # # # # # # # # # # # # #
+# 전체 세션 정보 초기화
+# # # # # # # # # # # # # # #
+
+
+def init_session_state():
+    # 세션 정보 초기화(공용)
+    if 'selected_service_name' not in st.session_state:
+        st.session_state.selected_service_name = None
+
+    if 'selected_area' not in st.session_state:
+        st.session_state.selected_area = None
+
+    if "companies_list_dict" not in st.session_state:
+        st.session_state.companies_list_dict = pickle_load_cache_file(COMPANIES_LIST_FILE, dict)
+
+    # 세션 정보 초기화(대시보드)
+    if 'status_df_dict' not in st.session_state:
+        st.session_state.status_df_dict = dict()
+
+    if 'target_service_set_dict' not in st.session_state:
+        st.session_state.target_service_set_dict = DEFAULT_COMPANIES_SET_DICT
+
+    if 'status_cache' not in st.session_state:
+        st.session_state.status_cache = dict()
+
+    if 'dashboard_refresh_timer' not in st.session_state:
+        st.session_state.dashboard_refresh_timer = 5
+
+    if 'refresh_timer_cache' not in st.session_state:
+        st.session_state.refresh_timer_cache = -1
+
+    if 'num_dashboard_columns' not in st.session_state:
+        st.session_state.num_dashboard_columns = 8
+
+    if 'display_chart' not in st.session_state:
+        st.session_state.display_chart = True
+
+    # 세션 정보 초기화(뉴스)
+    if "geolocations_dict" not in st.session_state:
+        st.session_state.geolocations_dict = pickle_load_cache_file(GEOLOC_CACHE_FILE, dict)
+
+    if 'trans_text_list' not in st.session_state:
+        st.session_state.trans_text_list = pickle_load_cache_file(TRANS_CACHE_FILE, list)
+
+    if "news_list" not in st.session_state:
+        st.session_state.news_list = []
+
+    if 'search_interval_timer_cache' not in st.session_state:
+        st.session_state.search_interval_timer_cache = -1
+
+    if 'search_interval_min' not in st.session_state:
+        st.session_state.search_interval_min = 5
+
+
+# # # # # # # # # # # # # # #
 # 피클 파일 로딩 함수
 # # # # # # # # # # # # # # #
 
@@ -204,6 +259,9 @@ def get_service_chart_df_by_url_list(area):
 
 
 def refresh_status_and_save_companies(area):
+    # 세션상태 방어 코드
+    init_session_state()
+
     # 상태 받아오기
     st.session_state.status_df_dict[area] = get_service_chart_df_by_url_list(area)
 
@@ -234,6 +292,9 @@ def refresh_status_and_save_companies(area):
 
 
 def get_service_chart_mapdf(area, service_name=None, need_map=False):
+    # 세션상태 방어 코드
+    init_session_state()
+
     # 최초 로딩 시 또는 service_name None일 경우
     if st.session_state.status_df_dict.get(area) is None or service_name is None:
         logging.info(f'최초 로딩으로 예상 - 서비스 상태 크롤링 시작 {area=} {service_name=}')
@@ -266,6 +327,9 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
 
 # 현재 알람이 뜬 서비스 목록을 가져오는 함수
 def get_current_alarm_service_list(area):
+    # 세션상태 방어 코드
+    init_session_state()
+
     if st.session_state.status_df_dict.get(area) is None:
         logging.info('현재 알람 상태 없어서 크롤링 시작')
         get_service_chart_mapdf(area)  # 현재 값이 없을 경우 강제 크롤링 1회 수행.

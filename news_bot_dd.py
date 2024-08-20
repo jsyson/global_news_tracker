@@ -19,6 +19,10 @@ import config
 # logging.basicConfig(level=logging.INFO)
 
 
+# 세션상태 방어 코드
+config.init_session_state()
+
+
 # Set verbose if needed
 # globals.set_debug(True)
 

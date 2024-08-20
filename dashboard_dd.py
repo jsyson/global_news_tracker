@@ -12,6 +12,10 @@ from datetime import datetime
 # logging.basicConfig(level=logging.INFO)
 
 
+# 세션상태 방어 코드
+config.init_session_state()
+
+
 # 대시보드 구성 함수
 def display_dashboard(area):
     # 최초 캐시 세션 생성
