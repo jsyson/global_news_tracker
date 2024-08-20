@@ -9,7 +9,7 @@ import config
 
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 # 세션 정보 초기화(공용)

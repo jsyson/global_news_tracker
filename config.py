@@ -2,13 +2,40 @@ import os
 import logging
 import pickle
 import streamlit as st
-import get_downdetector_web
 import time
 import pandas as pd
+from datetime import datetime
+import pytz
 
+
+# 한국 시간대를 사용하여 시간 생성
+class KSTFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        kst = pytz.timezone('Asia/Seoul')
+        # record.created를 변경하지 않고, 변환된 시간을 생성
+        created_time = datetime.fromtimestamp(record.created, kst)
+        if datefmt:
+            return created_time.strftime(datefmt)
+        else:
+            return created_time.strftime('%Y-%m-%d %H:%M:%S')
+
+
+# 로그 포맷 설정 (한국 시간대 포함)
+log_format = '%(asctime)s - %(levelname)s : %(message)s'
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로그 핸들러 설정
+handler = logging.StreamHandler()
+handler.setFormatter(KSTFormatter(log_format))
+
+# 기본 로거 설정
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+
+# # # # # # # # # # # # # # # # # # # #
+
+
+import get_downdetector_web
 
 
 # 파일명
@@ -180,8 +207,11 @@ def refresh_status_and_save_companies(area):
     # 상태 받아오기
     st.session_state.status_df_dict[area] = get_service_chart_df_by_url_list(area)
 
-    if st.session_state.status_df_dict[area] is None:
+    if st.session_state.status_df_dict[area] is None or len(st.session_state.status_df_dict[area]) == 0:
+        logging.error(f'{area} status_df 갱신 실패!')
         return
+
+    logging.info(f'{area} status_df 갱신 후 길이: {len(st.session_state.status_df_dict[area])}')
 
     # 회사 목록 파일 업데이트
     new_list = list(st.session_state.status_df_dict[area][get_downdetector_web.NAME])
@@ -195,7 +225,7 @@ def refresh_status_and_save_companies(area):
     st.session_state.companies_list_dict[area].sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
 
     # logging.info(f'{area} 회사 목록:\n{st.session_state.companies_list_dict[area][:5]} ...')
-    logging.info(f'{area} Total companies count: {len(st.session_state.companies_list_dict[area])}')
+    logging.info(f'{area} Total services count: {len(st.session_state.companies_list_dict[area])}')
 
     # 합쳐진 리스트를 다시 파일로 저장
     with open(COMPANIES_LIST_FILE, 'wb') as f_:
@@ -206,10 +236,17 @@ def refresh_status_and_save_companies(area):
 def get_service_chart_mapdf(area, service_name=None, need_map=False):
     # 최초 로딩 시 또는 service_name None일 경우
     if st.session_state.status_df_dict.get(area) is None or service_name is None:
+        logging.info(f'최초 로딩으로 예상 - 서비스 상태 크롤링 시작 {area=} {service_name=}')
         refresh_status_and_save_companies(area)
 
-    # 크롤링에 실패했을 경우 또는 단순 크롤링 목적의 호출일 경우
-    if st.session_state.status_df_dict.get(area) is None or service_name is None:
+    # 단순 크롤링 목적의 호출일 경우
+    if service_name is None:
+        logging.info(f'크롤링 종료 - {area=}')
+        return None, None, None
+
+    # 크롤링에 실패했을 경우
+    if st.session_state.status_df_dict.get(area) is None:
+        logging.error(f'서비스 상태 크롤링 실패!!! {area=} {service_name=}')
         return None, None, None
 
     for i, row in st.session_state.status_df_dict[area].iterrows():
@@ -217,6 +254,7 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
                 and row[get_downdetector_web.AREA].upper() == area.upper():  # 대소문자 구분 없이 이름/지역 일치 찾음.
             # 서비스를 찾으면 클래스, 리포트 리스트, 지도를 리턴함.
             if row[get_downdetector_web.VALUES] is None:
+                logging.info(f'{area} {service_name} 의 data_values 없음!')
                 data_values = None
             else:
                 data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
@@ -229,10 +267,12 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
 # 현재 알람이 뜬 서비스 목록을 가져오는 함수
 def get_current_alarm_service_list(area):
     if st.session_state.status_df_dict.get(area) is None:
+        logging.info('현재 알람 상태 없어서 크롤링 시작')
         get_service_chart_mapdf(area)  # 현재 값이 없을 경우 강제 크롤링 1회 수행.
 
     if st.session_state.status_df_dict.get(area) is None:
         # 크롤링에 실패했을 경우.
+        logging.error(f'크롤링 실패하여 현재 알람 상태 확인 불가!!!')
         return []
 
     alarm_list = []
@@ -241,6 +281,7 @@ def get_current_alarm_service_list(area):
                 and row[get_downdetector_web.AREA].upper() == area.upper():  # 해당 지역의 Red 알람
             alarm_list.append(row[get_downdetector_web.NAME])
 
+    logging.info(f'{area}의 Red 알람 서비스 목록: {alarm_list}')
     return alarm_list
 
 

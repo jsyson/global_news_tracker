@@ -9,7 +9,7 @@ from datetime import datetime
 
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 # 대시보드 구성 함수
@@ -19,7 +19,7 @@ def display_dashboard(area):
         st.session_state.status_cache[area] = dict()
 
     target_set = st.session_state.target_service_set_dict[area]
-    logging.info(f'{area} 대시보드 구성 목록:\n{target_set}\n')
+    logging.info(f'{area} 대시보드 구성 시작: {len(target_set)}개 서비스')
 
     # 현재 알람 크롤링 + 레드 알람 목록 가져옴.
     alarm_list = config.get_current_alarm_service_list(area=area)
@@ -202,6 +202,7 @@ st.sidebar.divider()
 kst = pytz.timezone('Asia/Seoul')
 current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
 st.sidebar.write(f'최종 업데이트 - {current_time}')
+logging.info(f'대시보드 업데이트 완료 : {current_time}')
 
 
 # 다음 업데이트 타이머 표기

@@ -16,7 +16,7 @@ import config
 
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 # Set verbose if needed

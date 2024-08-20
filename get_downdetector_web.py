@@ -30,7 +30,7 @@ WARNING = 'warning'
 SUCCESS = 'success'
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 
 # # # # # # # # # # # # # # # # # # # #
@@ -112,7 +112,7 @@ def get_impact_order(impact_class):
 
 
 # 다운디텍터 크롤링
-@st.cache_data
+@st.cache_data(show_spinner='서비스 상태 업데이트 중...')
 def get_downdetector_df(url, area, service_name=None):
     global CHROME_DRIVER
 
