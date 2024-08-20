@@ -2,7 +2,7 @@ import streamlit as st
 import logging
 
 
-# st.set_page_config(layout="wide")
+st.set_page_config(layout="wide")
 
 
 import config

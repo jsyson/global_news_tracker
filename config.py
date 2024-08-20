@@ -141,6 +141,10 @@ def pickle_load_cache_file(filename, default_type):
 
 
 def get_service_chart_df_by_url_list(area):
+    if area is None:
+        logging.info(f'{area=} 크롤링 미실행!')
+        return None
+
     logging.info(f'===== {area} 전체 크롤링 시작 =====')
 
     if area.upper() == 'JP':
@@ -190,8 +194,8 @@ def refresh_status_and_save_companies(area):
                                                           + new_list))
     st.session_state.companies_list_dict[area].sort(key=lambda x: x.lower())  # 대소문자 구분없이 abc 순으로 정렬
 
-    logging.info(f'{area} 회사 목록:\n' + str(st.session_state.companies_list_dict[area]))
-    logging.info(f'{area} Total companies count: ' + str(len(st.session_state.companies_list_dict[area])))
+    # logging.info(f'{area} 회사 목록:\n{st.session_state.companies_list_dict[area][:5]} ...')
+    logging.info(f'{area} Total companies count: {len(st.session_state.companies_list_dict[area])}')
 
     # 합쳐진 리스트를 다시 파일로 저장
     with open(COMPANIES_LIST_FILE, 'wb') as f_:

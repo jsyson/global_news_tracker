@@ -3,7 +3,9 @@ import logging
 import config
 import time
 import pandas as pd
+import pytz
 import re
+from datetime import datetime
 
 
 # 로깅 설정
@@ -134,6 +136,7 @@ def display_config_tab(area):
 
 
 # st.title('Global IT Dashboard')
+# st.set_page_config(layout="wide")
 
 
 # 사이드바
@@ -188,7 +191,20 @@ with dashboard_jp_tab:
     display_dashboard('JP')
 
 
-# 사이드바에 타이머 표기
+# # # # # # # # # #
+# 사이드바
+# # # # # # # # # #
+
+
+# 최종 업데이트 시각 표시
+st.sidebar.divider()
+
+kst = pytz.timezone('Asia/Seoul')
+current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
+st.sidebar.write(f'최종 업데이트 - {current_time}')
+
+
+# 다음 업데이트 타이머 표기
 st.sidebar.divider()
 
 # 타이머를 표시할 위치 예약

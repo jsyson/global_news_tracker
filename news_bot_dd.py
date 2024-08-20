@@ -90,7 +90,8 @@ def get_google_outage_news(keyword_):
 
 def display_news_df(ndf, keyword_):
     # st.divider()
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    kst = pytz.timezone('Asia/Seoul')
+    current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
 
     if ndf is None or len(ndf) == 0:
         st.write(f'✅ 검색된 뉴스 없습니다. ({current_time})')
