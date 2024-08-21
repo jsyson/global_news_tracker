@@ -168,7 +168,7 @@ def init_session_state():
 
     # 세션 정보 초기화(대시보드)
     if 'dashboard_auto_tab_timer' not in st.session_state:
-        st.session_state.dashboard_auto_tab_timer = 10
+        st.session_state.dashboard_auto_tab_timer = 30
 
     if 'auto_tab_timer_cache' not in st.session_state:
         st.session_state.auto_tab_timer_cache = -1
