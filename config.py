@@ -38,9 +38,12 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 import get_downdetector_web
 
 
-# 파일명
-DASHBOARD_PAGE = 'dashboard_dd.py'
-NEWSBOT_PAGE = 'news_bot_dd.py'
+# 파일명 등 각종 설정
+AREA_LIST = ['US', 'JP']
+
+DASHBOARD_US_PAGE = 'pages/dashboard_us.py'
+DASHBOARD_JP_PAGE = 'pages/dashboard_jp.py'
+NEWSBOT_PAGE = 'pages/news_bot_dd.py'
 
 GEOLOC_CACHE_FILE = 'geolocation_cache.pkl'
 TRANS_CACHE_FILE = 'trans_cache.pkl'
@@ -70,18 +73,20 @@ DEFAULT_COMPANIES_SET_DICT = {
         # 'Google Calendar',
         'Google Cloud',
         'Google Drive',
-        'Google Duo',
+        # 'Google Duo',
         'Google Maps',
         'Google Meet',
         'Google Play',
         # 'Google Public DNS',
-        'Google Workspace',
+        # 'Google Workspace',
 
         'iCloud',
         'Instagram',
-        'Line',
+        # 'Line',
         'Microsoft 365',
         # 'Minecraft',
+        'Microsoft Azure',
+        'Microsoft Teams',
         'Netflix',
         'OpenAI',
         # 'Paramount+',
@@ -117,12 +122,12 @@ DEFAULT_COMPANIES_SET_DICT = {
         # 'Google Calendar',
         'Google Cloud',
         'Google Drive',
-        'Google Duo',
+        # 'Google Duo',
         'Google Maps',
         'Google Meet',
         'Google Play',
         # 'Google Public DNS',
-        'Google Workspace',
+        # 'Google Workspace',
 
         'iCloud',
         'Instagram',
@@ -162,8 +167,17 @@ def init_session_state():
         st.session_state.companies_list_dict = pickle_load_cache_file(COMPANIES_LIST_FILE, dict)
 
     # 세션 정보 초기화(대시보드)
+    if 'dashboard_auto_tab_timer' not in st.session_state:
+        st.session_state.dashboard_auto_tab_timer = 10
+
+    if 'auto_tab_timer_cache' not in st.session_state:
+        st.session_state.auto_tab_timer_cache = -1
+
     if 'status_df_dict' not in st.session_state:
         st.session_state.status_df_dict = dict()
+
+    if 'game_df_dict' not in st.session_state:
+        st.session_state.game_df_dict = dict()
 
     if 'target_service_set_dict' not in st.session_state:
         st.session_state.target_service_set_dict = DEFAULT_COMPANIES_SET_DICT
@@ -234,16 +248,28 @@ def get_service_chart_df_by_url_list(area):
     else:
         postfix = 'com'
 
-    url_list = [f'https://downdetector.{postfix}/',
-                f'https://downdetector.{postfix}/telecom/',
-                f'https://downdetector.{postfix}/online-services/',
-                f'https://downdetector.{postfix}/social-media/'
-                ]
+    categories_list = [
+        get_downdetector_web.TELECOM,
+        get_downdetector_web.ONLINE_SERVICE,
+        get_downdetector_web.SOCIAL_MEDIA,
+        get_downdetector_web.FINANCE,
+        get_downdetector_web.GAMING,
+    ]
+
+    # url_list = [  # f'https://downdetector.{postfix}/',
+    #             f'https://downdetector.{postfix}/telecom/',
+    #             f'https://downdetector.{postfix}/online-services/',
+    #             f'https://downdetector.{postfix}/social-media/',
+    #             f'https://downdetector.{postfix}/finance/',
+    #             f'https://downdetector.{postfix}/gaming/',
+    #             ]
 
     df_list = []
-    for url_item in url_list:
+    for category_item in categories_list:
+        url_item = f'https://downdetector.{postfix}/{category_item}/'
         df_ = get_downdetector_web.get_downdetector_df(url=url_item, area=area)
         if df_ is not None:
+            df_[get_downdetector_web.CATEGORY] = category_item  # 종류 구분을 첨부해준다.
             df_list.append(df_)
         time.sleep(1)  # guard time
 
@@ -341,11 +367,17 @@ def get_current_alarm_service_list(area):
 
     alarm_list = []
     for i, row in st.session_state.status_df_dict[area].iterrows():
+        # 해당 지역의 Red 알람이면서 게임/금융 알람이 아닌 것.
         if row[get_downdetector_web.CLASS] == get_downdetector_web.DANGER \
-                and row[get_downdetector_web.AREA].upper() == area.upper():  # 해당 지역의 Red 알람
+                and row[get_downdetector_web.AREA].upper() == area.upper() \
+                and row[get_downdetector_web.CATEGORY] != get_downdetector_web.GAMING \
+                and row[get_downdetector_web.CATEGORY] != get_downdetector_web.FINANCE:
             alarm_list.append(row[get_downdetector_web.NAME])
 
     logging.info(f'{area}의 Red 알람 서비스 목록: {alarm_list}')
+
+    # game들은 제외.
+
     return alarm_list
 
 

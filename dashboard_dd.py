@@ -6,6 +6,7 @@ import pandas as pd
 import pytz
 import re
 from datetime import datetime
+import altair as alt
 
 
 # 로깅 설정
@@ -14,6 +15,27 @@ from datetime import datetime
 
 # 세션상태 방어 코드
 config.init_session_state()
+
+
+# 리포트 차트 그리는 함수
+def display_chart(chart_list, color_code):
+    if chart_list is None or chart_list == []:
+        chart_list = [0] * 96
+
+    chart_data = pd.DataFrame(chart_list, columns=["Report Count"]).dropna().astype('int').reset_index()
+    # st.line_chart(chart_data, color=color_code, height=80)
+
+    # Altair를 사용한 라인 차트 생성
+    line_chart = alt.Chart(chart_data).mark_line().encode(
+        x=alt.X('index', title=None, axis=alt.Axis(labels=False, ticks=False)),  # 축 레이블과 틱 제거
+        y=alt.Y('Report Count', title=None, axis=alt.Axis(labels=False, ticks=False)),
+        color=alt.value(color_code)
+    ).properties(
+        height=50  # 차트 높이 설정
+    )
+
+    # 차트를 Streamlit에 표시
+    st.altair_chart(line_chart, use_container_width=True)
 
 
 # 대시보드 구성 함수
@@ -80,15 +102,8 @@ def display_dashboard(area):
                     logging.info(f'버튼 눌림!!! {area=} {item=}')
                     st.switch_page(config.NEWSBOT_PAGE)
 
-                if st.session_state.display_chart and chart_list:
-                    # logging.info(f'{area} {item} 차트 출력함.')
-                    chart_data = pd.DataFrame(chart_list, columns=["Report Count"]).dropna().astype('int')
-                    st.line_chart(chart_data, color=color_code, height=80)
-
-                elif st.session_state.display_chart and chart_list is None:
-                    # logging.info(f'{area} {item} 차트 없음.')
-                    chart_data = pd.DataFrame([0] * 96, columns=["Report Count"])
-                    st.line_chart(chart_data, color=color_code, height=80)
+                if st.session_state.display_chart:
+                    display_chart(chart_list, color_code)
 
     with st.expander('Raw Data'):
         st.write(st.session_state.status_df_dict[area])
@@ -139,102 +154,92 @@ def display_config_tab(area):
 # # # # # # # # # # # # # # # # # # # #
 
 
-# st.title('Global IT Dashboard')
-# st.set_page_config(layout="wide")
+def make_all_dashboard_tabs(area, icon=''):
+    # 사이드바
+    st.session_state.dashboard_auto_tab_timer = st.sidebar.number_input('페이지 자동 전환 주기(초), 0=Off',
+                                                                        value=st.session_state.dashboard_auto_tab_timer,
+                                                                        format='%d', min_value=0)
+    st.session_state.num_dashboard_columns = st.sidebar.number_input('출력 컬럼 수',
+                                                                     value=st.session_state.num_dashboard_columns,
+                                                                     format='%d', min_value=1)
+    st.session_state.dashboard_refresh_timer = st.sidebar.number_input('새로고침 주기(분)',
+                                                                       value=st.session_state.dashboard_refresh_timer,
+                                                                       format='%d', min_value=3)
+    st.session_state.display_chart = st.sidebar.checkbox('리포트 차트 보기', value=st.session_state.display_chart)
 
+    # 메인 페이지
+    st.subheader(f'Global Service Status - {area} {icon}')
 
-# 사이드바
-st.session_state.display_chart = st.sidebar.checkbox('리포트 차트 보기', value=st.session_state.display_chart)
-st.session_state.num_dashboard_columns = st.sidebar.number_input('출력 컬럼 수',
-                                                                 value=st.session_state.num_dashboard_columns,
-                                                                 format='%d')
-st.session_state.dashboard_refresh_timer = st.sidebar.number_input('새로고침 주기(분)',
-                                                                   value=st.session_state.dashboard_refresh_timer,
-                                                                   format='%d')
+    # 탭 설정
+    dashboard_tab, config_tab = st.tabs(["대시보드", "감시설정"])
 
+    # # # # # # # # # #
+    # 설정 탭
+    # # # # # # # # # #
 
-# 메인 페이지
-st.subheader('Global Service Status')
-dashboard_us_tab, dashboard_jp_tab, config_us_tab, config_jp_tab = st.tabs(["미국", "일본",
-                                                                            "감시설정-미국", "감시설정-일본"])
+    with config_tab:
+        display_config_tab(area)
 
+    # # # # # # # # # #
+    # 탭 - 대시보드
+    # # # # # # # # # #
 
-# # # # # # # # # #
-# 탭3 - 설정 탭(미국)
-# # # # # # # # # #
+    with dashboard_tab:
+        display_dashboard(area)
 
+    # # # # # # # # # #
+    # 기타 타이머 관련
+    # # # # # # # # # #
 
-with config_us_tab:
-    display_config_tab('US')
+    if st.session_state.dashboard_auto_tab_timer > 0:
+        logging.info('자동 탭 전환 켜짐')
+    elif st.session_state.dashboard_auto_tab_timer == 0:
+        logging.info('자동 탭 전환 꺼짐')
 
+    # 최종 업데이트 시각 표시
+    st.sidebar.divider()
 
-# # # # # # # # # #
-# 탭4 - 설정 탭(일본)
-# # # # # # # # # #
+    kst = pytz.timezone('Asia/Seoul')
+    current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
+    st.sidebar.write(f'최종 업데이트 - {current_time}')
+    logging.info(f'대시보드 업데이트 완료 : {current_time}')
 
+    # 다음 업데이트 타이머 표기
+    st.sidebar.divider()
 
-with config_jp_tab:
-    display_config_tab('JP')
+    # 타이머를 표시할 위치 예약
+    timer_placeholder = st.sidebar.empty()
 
+    # 카운트다운 초 계산
+    if st.session_state.refresh_timer_cache <= 0:
+        st.session_state.refresh_timer_cache = st.session_state.dashboard_refresh_timer * 60
+    if st.session_state.auto_tab_timer_cache <= 0:
+        st.session_state.auto_tab_timer_cache = st.session_state.dashboard_auto_tab_timer
 
-# # # # # # # # # #
-# 탭1 - 대시보드 미국
-# # # # # # # # # #
+    # 타이머 실행
+    while st.session_state.refresh_timer_cache >= 0:
+        # 타이머 갱신
+        timer_placeholder.markdown(f"⏳ Refresh까지 {st.session_state.refresh_timer_cache}초")
 
+        # 1초 대기
+        time.sleep(1)
 
-with dashboard_us_tab:
-    display_dashboard('US')
+        # 타이머 감소
+        st.session_state.refresh_timer_cache -= 1
+        st.session_state.auto_tab_timer_cache -= 1
 
+        # 대시보드 전환 타이머 처리
+        if st.session_state.dashboard_auto_tab_timer > 0 > st.session_state.auto_tab_timer_cache:
+            if area == 'US':
+                st.switch_page(config.DASHBOARD_JP_PAGE)
+            elif area == 'JP':
+                st.switch_page(config.DASHBOARD_US_PAGE)
 
-# # # # # # # # # #
-# 탭2 - 대시보드 일본
-# # # # # # # # # #
+    # 타이머 완료 메시지
+    timer_placeholder.markdown("⏰ 카운트다운 완료! 서비스 상태 재검색!")
+    st.session_state.status_cache = dict()
 
-
-with dashboard_jp_tab:
-    display_dashboard('JP')
-
-
-# # # # # # # # # #
-# 사이드바
-# # # # # # # # # #
-
-
-# 최종 업데이트 시각 표시
-st.sidebar.divider()
-
-kst = pytz.timezone('Asia/Seoul')
-current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
-st.sidebar.write(f'최종 업데이트 - {current_time}')
-logging.info(f'대시보드 업데이트 완료 : {current_time}')
-
-
-# 다음 업데이트 타이머 표기
-st.sidebar.divider()
-
-# 타이머를 표시할 위치 예약
-timer_placeholder = st.sidebar.empty()
-
-# 카운트다운 초 계산
-if st.session_state.refresh_timer_cache <= 0:
-    st.session_state.refresh_timer_cache = st.session_state.dashboard_refresh_timer * 60
-
-# 타이머 실행
-while st.session_state.refresh_timer_cache >= 0:
-    # 타이머 갱신
-    timer_placeholder.markdown(f"⏳ Refresh까지 {st.session_state.refresh_timer_cache}초")
-
-    # 1초 대기
-    time.sleep(1)
-
-    # 타이머 감소
-    st.session_state.refresh_timer_cache -= 1
-
-# 타이머 완료 메시지
-timer_placeholder.markdown("⏰ 카운트다운 완료! 서비스 상태 재검색!")
-st.session_state.status_cache = dict()
-
-logging.info('새로 고침!!!')
-config.init_status_df()  # 서비스 상태 초기화
-st.rerun()
+    logging.info('새로 고침!!!')
+    config.init_status_df()  # 서비스 상태 초기화
+    st.rerun()
 

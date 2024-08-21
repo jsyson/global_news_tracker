@@ -23,11 +23,20 @@ NAME = 'Name'
 VALUES = "Values"
 CLASS = "Class"
 AREA = "Area"
+CATEGORY = "Category"
 
 # 클래스명
 DANGER = "danger"
 WARNING = 'warning'
 SUCCESS = 'success'
+
+# 카테고리명
+TELECOM = 'telecom'
+ONLINE_SERVICE = 'online-services'
+SOCIAL_MEDIA = 'social-media'
+FINANCE = 'finance'
+GAMING = 'gaming'
+
 
 # 로깅 설정
 # logging.basicConfig(level=logging.INFO)
