@@ -16,3 +16,4 @@ undetected-chromedriver
 seleniumbase
 
 altair
+numpy

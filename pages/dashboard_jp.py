@@ -11,5 +11,5 @@ config.init_session_state()
 # # # # # # # # # # # # # # # # # # # #
 
 
-dashboard_dd.make_all_dashboard_tabs('JP', icon='🇯🇵')
+dashboard_dd.make_all_dashboard_tabs('JP', icon='')
 

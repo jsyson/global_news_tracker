@@ -7,6 +7,7 @@ import pytz
 import re
 from datetime import datetime
 import altair as alt
+import numpy as np
 
 
 # 로깅 설정
@@ -77,7 +78,8 @@ def display_dashboard(area):
                 # 상태
                 _, color_code, _ = config.get_status_color(item, status)
 
-                unique_id = f'button-after-{re.sub(r"[^a-zA-Z]", "", item)}-{area}'
+                rand_code = np.random.randint(0, 10000000)
+                unique_id = f'button-after-{re.sub(r"[^a-zA-Z]", "", item)}-{area}-{rand_code}'
 
                 st.markdown(f'<style>.element-container:has(#{unique_id})'
                             ' + div button '
