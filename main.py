@@ -29,8 +29,8 @@ def help_page():
 
 
 pg = st.navigation([
-    st.Page(config.DASHBOARD_US_PAGE, title='Dashboard(US)', icon="🇺🇸", default=True),
-    st.Page(config.DASHBOARD_JP_PAGE, title='Dashboard(JP)', icon="🇯🇵"),
+    st.Page(config.DASHBOARD_US_PAGE, title='Dashboard(US)', icon="📊", default=True),
+    st.Page(config.DASHBOARD_JP_PAGE, title='Dashboard(JP)', icon="📊"),
     st.Page(config.NEWSBOT_PAGE, title="News Tracker", icon='💬'),  # , url_path='news_tracker'),
     st.Page(help_page, title="Help", icon='❓')
 ])

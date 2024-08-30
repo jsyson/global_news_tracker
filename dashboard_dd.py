@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 import altair as alt
 import numpy as np
+import base64
 
 
 # 로깅 설정
@@ -78,8 +79,9 @@ def display_dashboard(area):
                 # 상태
                 _, color_code, _ = config.get_status_color(item, status)
 
-                rand_code = np.random.randint(0, 10000000)
-                unique_id = f'button-after-{re.sub(r"[^a-zA-Z]", "", item)}-{area}-{rand_code}'
+                # rand_code = np.random.randint(0, 10000)
+                index_code = list(st.session_state.status_cache[area].keys()).index(item)
+                unique_id = f'button-after-{re.sub(r"[^a-zA-Z]", "", item)}-{area}-{index_code}'
 
                 st.markdown(f'<style>.element-container:has(#{unique_id})'
                             ' + div button '
@@ -101,7 +103,7 @@ def display_dashboard(area):
                 if st.button(f"{item}", key=unique_id):  # {status}
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
-                    logging.info(f'버튼 눌림!!! {area=} {item=}')
+                    logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
                     st.switch_page(config.NEWSBOT_PAGE)
 
                 if st.session_state.display_chart:
@@ -156,7 +158,7 @@ def display_config_tab(area):
 # # # # # # # # # # # # # # # # # # # #
 
 
-def make_all_dashboard_tabs(area, icon=''):
+def make_all_dashboard_tabs(area, icon='', image_path=None):
     # 사이드바
     st.session_state.dashboard_auto_tab_timer = st.sidebar.number_input('페이지 자동 전환 주기(초), 0=Off',
                                                                         value=st.session_state.dashboard_auto_tab_timer,
@@ -170,7 +172,36 @@ def make_all_dashboard_tabs(area, icon=''):
     st.session_state.display_chart = st.sidebar.checkbox('리포트 차트 보기', value=st.session_state.display_chart)
 
     # 메인 페이지
-    st.subheader(f'Global Service Status - {area} {icon}')
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.subheader(f'Global Service Status - {area} {icon}')
+
+        # Font Awesome CSS를 HTML에 추가
+        # st.markdown(
+        #     """
+        #     <link rel="stylesheet"
+        #     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+        #     """,
+        #     unsafe_allow_html=True
+        # )
+        # st.markdown(f'<i class="fa-solid fa-flag-usa"></i> Global Service Status Dashboard - {area}',
+        #             unsafe_allow_html=True)
+
+    with col2:
+        if image_path:
+            # 이미지 파일을 읽어서 Base64로 인코딩
+            with open(image_path, "rb") as image_file:
+                encoded_image = base64.b64encode(image_file.read()).decode()
+
+            st.markdown(
+                f"""
+                <div style="text-align: right;">
+                    <img src="data:image/jpeg;base64,{encoded_image}" width="50">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            logging.info(f'{image_path} 출력 완료')
 
     # 탭 설정
     dashboard_tab, config_tab = st.tabs(["대시보드", "감시설정"])
