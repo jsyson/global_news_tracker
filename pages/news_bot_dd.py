@@ -294,6 +294,9 @@ def get_multiple(values_sr):
 
 # st.title('뉴스 검색 봇')
 
+# 버튼 변수를 초기화.
+st.session_state.dashboard_button_clicked = False
+
 
 # # # # # # # # # # # # # # #
 # 사이드바

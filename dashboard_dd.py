@@ -40,6 +40,12 @@ def display_chart(chart_list, color_code):
     st.altair_chart(line_chart, use_container_width=True)
 
 
+def click_button(selected_service_name):
+    logging.info(f'{selected_service_name} 버튼 눌림!')
+    st.session_state.selected_service_name = selected_service_name
+    st.session_state.dashboard_button_clicked = True
+
+
 # 대시보드 구성 함수
 def display_dashboard(area):
     # 최초 캐시 세션 생성
@@ -79,9 +85,15 @@ def display_dashboard(area):
                 # 상태
                 _, color_code, _ = config.get_status_color(item, status)
 
-                # rand_code = np.random.randint(0, 10000)
-                index_code = list(st.session_state.status_cache[area].keys()).index(item)
-                unique_id = f'button-after-{re.sub(r"[^a-zA-Z]", "", item)}-{area}-{index_code}'
+                # print(st.session_state.companies_list_dict[area])
+                if item in st.session_state.companies_list_dict[area]:
+                    index_code = st.session_state.companies_list_dict[area].index(item)
+                else:
+                    index_code = 'None'
+                    logging.error(f'{item}이 회사 목록에 없음!!!')
+
+                unique_id = f'btn-{re.sub(r"[^a-zA-Z]", "", item).lower()}-{area.lower()}-{index_code}'
+                logging.info(f'{item=} {unique_id}')
 
                 st.markdown(f'<style>.element-container:has(#{unique_id})'
                             ' + div button '
@@ -100,10 +112,11 @@ def display_dashboard(area):
                  }</style>""", unsafe_allow_html=True)
 
                 st.markdown(f'<span id="{unique_id}"></span>', unsafe_allow_html=True)
-                if st.button(f"{item}", key=unique_id):  # {status}
+                if st.button(f"{item}", key=unique_id, on_click=click_button, args=(item,)):
+                    logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
-                    logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
+                    # st.session_state.dashboard_button_clicked = True
                     st.switch_page(config.NEWSBOT_PAGE)
 
                 if st.session_state.display_chart:
@@ -219,6 +232,14 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
 
     with dashboard_tab:
         display_dashboard(area)
+
+    # # # # # # # # # #
+    # 탭 - 대시보드
+    # # # # # # # # # #
+
+    if st.session_state.dashboard_button_clicked:
+        logging.info('버튼 눌림 처리!')
+        st.switch_page(config.NEWSBOT_PAGE)
 
     # # # # # # # # # #
     # 기타 타이머 관련
