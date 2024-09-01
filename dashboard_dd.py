@@ -40,8 +40,9 @@ def display_chart(chart_list, color_code):
     st.altair_chart(line_chart, use_container_width=True)
 
 
-def click_button(selected_service_name):
-    logging.info(f'{selected_service_name} 버튼 눌림!')
+def click_button(area, selected_service_name):
+    logging.info(f'{area} {selected_service_name} 버튼 눌림!')
+    st.session_state.selected_area = area
     st.session_state.selected_service_name = selected_service_name
     st.session_state.dashboard_button_clicked = True
 
@@ -112,7 +113,7 @@ def display_dashboard(area):
                  }</style>""", unsafe_allow_html=True)
 
                 st.markdown(f'<span id="{unique_id}"></span>', unsafe_allow_html=True)
-                if st.button(f"{item}", key=unique_id, on_click=click_button, args=(item,)):
+                if st.button(f"{item}", key=unique_id, on_click=click_button, args=(area, item,)):
                     logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
