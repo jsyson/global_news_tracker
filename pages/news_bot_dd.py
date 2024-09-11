@@ -13,7 +13,7 @@ import streamlit as st
 from google.cloud import translate_v2 as translate  # pip install google-cloud-translate==2.0.1
 from google.oauth2 import service_account
 import config
-
+import dashboard_dd
 
 # 로깅 설정
 # logging.basicConfig(level=logging.INFO)
@@ -390,8 +390,9 @@ if service_code_name:
             st.write('📈 Live Report Chart (Last 24 hours)')
 
             with st.container():
-                chart_data = pd.DataFrame(report_list, columns=["Report Count"])
-                st.line_chart(chart_data, color=color_code)
+                # chart_data = pd.DataFrame(report_list, columns=["Report Count"])
+                # st.line_chart(chart_data, color=color_code)
+                dashboard_dd.display_chart(report_list, color_code, chart_height=500)
         else:
             st.write('')  # no report chart
 

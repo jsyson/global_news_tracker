@@ -10,7 +10,6 @@ import altair as alt
 import numpy as np
 import base64
 
-
 # 로깅 설정
 # logging.basicConfig(level=logging.INFO)
 
@@ -20,7 +19,7 @@ config.init_session_state()
 
 
 # 리포트 차트 그리는 함수
-def display_chart(chart_list, color_code):
+def display_chart(chart_list, color_code, chart_height=50):
     if chart_list is None or chart_list == []:
         chart_list = [0] * 96
 
@@ -33,11 +32,48 @@ def display_chart(chart_list, color_code):
         y=alt.Y('Report Count', title=None, axis=alt.Axis(labels=False, ticks=False)),
         color=alt.value(color_code)
     ).properties(
-        height=50  # 차트 높이 설정
+        height=chart_height  # 차트 높이 설정
     )
 
+    # 최대값이 0이면 이대로 뿌려주고 끝낸다.
+    if chart_data['Report Count'].max() == 0:
+        # 차트를 Streamlit에 표시
+        st.altair_chart(line_chart, use_container_width=True)
+        return
+
+    # 최대값이 있을 경우 화면에 표시해준다.
+    # 최대값 인덱스 확인
+    max_index = chart_data['Report Count'].idxmax()
+
+    color_name = 'red'
+    f_size = 20
+    if color_code == config.GREEN:
+        color_name = 'green'
+        f_size = 10
+    elif color_code == config.ORANGE:
+        color_name = 'orange'
+        f_size = 15
+
+    # 큰 차트에서는 숫자 크기도 키운다.
+    if chart_height > 100:
+        f_size *= 2
+
+    # 최대값을 중앙에 텍스트로 표시하는 mark_text 추가
+    text = (alt.Chart(chart_data).mark_text(align='center', baseline='middle', dy=-10, color=color_name, size=f_size).encode(
+        x=alt.X('index', title=None),
+        y=alt.Y('Report Count', title=None),
+        text=alt.condition(
+            alt.datum.index == max_index,  # 최대값에만 텍스트 표시
+            alt.Text('Report Count:Q'),
+            alt.value('')
+        )
+    ))
+
+    # 차트와 텍스트를 결합하여 표시
+    final_chart = line_chart + text
+
     # 차트를 Streamlit에 표시
-    st.altair_chart(line_chart, use_container_width=True)
+    st.altair_chart(final_chart, use_container_width=True)
 
 
 def click_button(area, selected_service_name):
@@ -297,4 +333,3 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
     logging.info('새로 고침!!!')
     config.init_status_df()  # 서비스 상태 초기화
     st.rerun()
-
