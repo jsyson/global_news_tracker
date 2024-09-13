@@ -46,13 +46,13 @@ def display_chart(chart_list, color_code, chart_height=50):
     max_index = chart_data['Report Count'].idxmax()
 
     color_name = 'red'
-    f_size = 20
+    f_size = 25
     if color_code == config.GREEN:
         color_name = 'green'
-        f_size = 10
+        f_size = 20
     elif color_code == config.ORANGE:
         color_name = 'orange'
-        f_size = 15
+        f_size = 20
 
     # 큰 차트에서는 숫자 크기도 키운다.
     if chart_height > 100:
