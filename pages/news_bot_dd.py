@@ -392,7 +392,7 @@ if service_code_name:
             with st.container():
                 # chart_data = pd.DataFrame(report_list, columns=["Report Count"])
                 # st.line_chart(chart_data, color=color_code)
-                dashboard_dd.display_chart(report_list, color_code, chart_height=500)
+                dashboard_dd.display_chart(report_list, color_code, chart_height=500, label_tick=True)
         else:
             st.write('')  # no report chart
 

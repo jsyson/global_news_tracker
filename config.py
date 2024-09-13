@@ -62,6 +62,7 @@ DEFAULT_COMPANIES_SET_DICT = {
     'US': {
         'Amazon',
         'Amazon Web Services',
+        'Amazon Prime Video',
         'AT&T',
         'Cloudflare',
         'Discord',

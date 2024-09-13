@@ -19,17 +19,18 @@ config.init_session_state()
 
 
 # 리포트 차트 그리는 함수
-def display_chart(chart_list, color_code, chart_height=50):
+def display_chart(chart_list, color_code, chart_height=50, label_tick=False):
     if chart_list is None or chart_list == []:
         chart_list = [0] * 96
 
     chart_data = pd.DataFrame(chart_list, columns=["Report Count"]).dropna().astype('int').reset_index()
+    chart_data['Time'] = chart_data['index'].apply(lambda x: ((x - 96) * 15) / 60)
     # st.line_chart(chart_data, color=color_code, height=80)
 
     # Altair를 사용한 라인 차트 생성
     line_chart = alt.Chart(chart_data).mark_line().encode(
-        x=alt.X('index', title=None, axis=alt.Axis(labels=False, ticks=False)),  # 축 레이블과 틱 제거
-        y=alt.Y('Report Count', title=None, axis=alt.Axis(labels=False, ticks=False)),
+        x=alt.X('Time', title=None, axis=alt.Axis(labels=label_tick, ticks=label_tick)),  # 축 레이블과 틱 제거
+        y=alt.Y('Report Count', title=None, axis=alt.Axis(labels=label_tick, ticks=label_tick)),
         color=alt.value(color_code)
     ).properties(
         height=chart_height  # 차트 높이 설정
@@ -46,13 +47,13 @@ def display_chart(chart_list, color_code, chart_height=50):
     max_index = chart_data['Report Count'].idxmax()
 
     color_name = 'red'
-    f_size = 25
+    f_size = 20
     if color_code == config.GREEN:
         color_name = 'green'
-        f_size = 20
+        f_size = 18
     elif color_code == config.ORANGE:
         color_name = 'orange'
-        f_size = 20
+        f_size = 19
 
     # 큰 차트에서는 숫자 크기도 키운다.
     if chart_height > 100:
@@ -60,7 +61,7 @@ def display_chart(chart_list, color_code, chart_height=50):
 
     # 최대값을 중앙에 텍스트로 표시하는 mark_text 추가
     text = (alt.Chart(chart_data).mark_text(align='center', baseline='middle', dy=-10, color=color_name, size=f_size).encode(
-        x=alt.X('index', title=None),
+        x=alt.X('Time', title=None),
         y=alt.Y('Report Count', title=None),
         text=alt.condition(
             alt.datum.index == max_index,  # 최대값에만 텍스트 표시
