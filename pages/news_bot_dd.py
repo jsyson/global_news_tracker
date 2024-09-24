@@ -35,9 +35,13 @@ config.init_session_state()
 def get_google_outage_news(keyword_):
     query = keyword_
     if and_keyword:
-        query += ' ' + and_keyword[0]
+        query += ' AND ' + and_keyword[0]
 
-    url = f"https://news.google.com/rss/search?q={query}+when:{search_hour}h"
+    url = f"https://news.google.com/rss/search?q={query}"
+
+    if search_hour:
+        url += f"+when:{search_hour}h"
+
     url += f'&hl=en-US&gl=US&ceid=US:en'
     url = url.replace(' ', '%20')
 
@@ -327,9 +331,11 @@ service_code_name = st.sidebar.selectbox(
 )
 
 
-search_hour = st.sidebar.number_input('최근 몇시간의 뉴스를 검색할까요?', value=1, format='%d')
+search_hour = st.sidebar.number_input('최근 몇시간 뉴스를 검색할까요? (0=무제한)', value=1, format='%d')
 
-and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드", options=['outage', 'blackout', 'failure'], default=['outage'])
+and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드 (1개만 적용 가능)",
+                                     options=['outage', 'blackout', 'failure'],
+                                     default=['outage'])
 
 st.session_state.search_interval_min = st.sidebar.number_input('새로고침 주기(분)',
                                                                value=st.session_state.search_interval_min,
