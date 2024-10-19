@@ -253,6 +253,7 @@ def get_service_chart_df_by_url_list(area):
         postfix = 'com'
 
     categories_list = [
+        'None',
         get_downdetector_web.TELECOM,
         get_downdetector_web.ONLINE_SERVICE,
         get_downdetector_web.SOCIAL_MEDIA,
@@ -270,7 +271,10 @@ def get_service_chart_df_by_url_list(area):
 
     df_list = []
     for category_item in categories_list:
-        url_item = f'https://downdetector.{postfix}/{category_item}/'
+        if category_item != 'None':
+            url_item = f'https://downdetector.{postfix}/{category_item}/'
+        else:
+            url_item = f'https://downdetector.{postfix}/'
         df_ = get_downdetector_web.get_downdetector_df(url=url_item, area=area)
         if df_ is not None:
             df_[get_downdetector_web.CATEGORY] = category_item  # 종류 구분을 첨부해준다.
