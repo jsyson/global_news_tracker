@@ -254,11 +254,11 @@ def get_service_chart_df_by_url_list(area):
 
     categories_list = [
         'None',
-        get_downdetector_web.TELECOM,
-        get_downdetector_web.ONLINE_SERVICE,
-        get_downdetector_web.SOCIAL_MEDIA,
-        get_downdetector_web.FINANCE,
-        get_downdetector_web.GAMING,
+        # get_downdetector_web.TELECOM,
+        # get_downdetector_web.ONLINE_SERVICE,
+        # get_downdetector_web.SOCIAL_MEDIA,
+        # get_downdetector_web.FINANCE,
+        # get_downdetector_web.GAMING,
     ]
 
     # url_list = [  # f'https://downdetector.{postfix}/',
