@@ -67,6 +67,7 @@ def get_driver():
     stealth(new_driver,
             languages=["en-US", "en"],
             vendor="Google Inc.",
+            platform="Win32",
             webgl_vendor="Intel Inc.",
             renderer="Intel Iris OpenGL Engine",
             fix_hairline=True,
@@ -77,13 +78,13 @@ def get_driver():
 
 # Selenium 설정
 options = Options()
-options.add_argument("--window-size=1920,1080")
+options.add_argument("start-maximized")
 options.add_argument("--disable-gpu")
 options.add_argument("--headless")
 # options.add_argument("--headless=new")  # 최신 헤드리스 모드를 사용
+
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--disable-blink-features=AutomationControlled")
 
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
