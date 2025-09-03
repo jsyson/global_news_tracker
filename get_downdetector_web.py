@@ -15,7 +15,7 @@ from selenium_stealth import stealth
 import pandas as pd
 import sys
 import logging
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 
 # 필드명
@@ -207,30 +207,30 @@ def get_downdetector_df(url, area, service_name=None):
     return df_sorted
 
 
-def make_plot(df_):
-    # 색상 매핑 딕셔너리
-    color_map = {DANGER: 'red', WARNING: 'orange', SUCCESS: 'green'}
-
-    # 서브플롯 그리기
-    fig, axs = plt.subplots(len(df_), figsize=(10, 8))
-
-    # 각 행에 대해 서브플롯 그리기
-    for i, row in df_.iterrows():
-        # 각 impact_class에 해당하는 색상 선택
-        color = color_map.get(row[CLASS], 'blue')  # 없는 경우 기본값으로 파란색 지정
-        data_values = [int(x) for x in row[VALUES].strip('[]').split(', ')]
-        axs[i].plot(data_values, color=color)  # 색상 적용
-        axs[i].set_title(row[NAME])
-
-    plt.tight_layout()
-    plt.show()
+# def make_plot(df_):
+#     # 색상 매핑 딕셔너리
+#     color_map = {DANGER: 'red', WARNING: 'orange', SUCCESS: 'green'}
+#
+#     # 서브플롯 그리기
+#     fig, axs = plt.subplots(len(df_), figsize=(10, 8))
+#
+#     # 각 행에 대해 서브플롯 그리기
+#     for i, row in df_.iterrows():
+#         # 각 impact_class에 해당하는 색상 선택
+#         color = color_map.get(row[CLASS], 'blue')  # 없는 경우 기본값으로 파란색 지정
+#         data_values = [int(x) for x in row[VALUES].strip('[]').split(', ')]
+#         axs[i].plot(data_values, color=color)  # 색상 적용
+#         axs[i].set_title(row[NAME])
+#
+#     plt.tight_layout()
+#     plt.show()
 
 
 if __name__ == '__main__':
     # test code
-    df = get_downdetector_df(url='https://downdetector.com/telecom/', area='US')
+    df = get_downdetector_df(url='https://downdetector.com/', area='US')
     if df is not None:
         df_sample = df.head(5).reset_index(drop=True)
-        make_plot(df_sample)
+        # make_plot(df_sample)
     # CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.
 
