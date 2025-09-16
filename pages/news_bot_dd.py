@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 import pytz
 import re
 import streamlit as st
-from google.cloud import translate_v2 as translate  # pip install google-cloud-translate==2.0.1
-from google.oauth2 import service_account
+# from google.cloud import translate_v2 as translate  # pip install google-cloud-translate==2.0.1
+# from google.oauth2 import service_account
 import config
 import dashboard_dd
 
@@ -126,12 +126,12 @@ def display_news_df(ndf, keyword_):
             title = re.sub(and_keyword[0], f':blue-background[{and_keyword[0]}]', title, flags=re.IGNORECASE)
         # logging.info('after : ' + title)
 
-        # 제목 번역
-        korean_title = translate_eng_to_kor(row['제목'])
+        # 제목 번역 미수행
+        # korean_title = translate_eng_to_kor(row['제목'])
 
         with st.container(border=True):
             st.markdown(f'**{title}**')
-            st.caption(f'{korean_title}')
+            # st.caption(f'{korean_title}')
             st.markdown(f'- {row["언론사"]}, {row["발행시간"]} <a href="{row["링크"]}" target="_blank">📝</a>',
                         unsafe_allow_html=True)
         # st.write(' - 언론사: ' + row['언론사'] + '  - 발행시각: ' + row['발행시간'])
@@ -161,46 +161,46 @@ def fetch_news(keyword_, infinite_loop=False):
 # # # # # # # # # # # # # # #
 
 
-def translate_eng_to_kor(text):
-    # 캐시를 먼저 뒤져본다.
-    cache_text = load_trans_cache(text)
-    if cache_text:
-        logging.info('trans cache hit! - ' + text + ' : ' + cache_text)
-        return cache_text  # 캐시힛!
-
-    # 캐시에 없으면 구글 api로 번역을 한다.
-    if not os.path.exists(config.KEY_PATH):
-        return ''
-
-    credential_trans = service_account.Credentials.from_service_account_file(config.KEY_PATH)
-    translate_client = translate.Client(credentials=credential_trans)
-
-    result = translate_client.translate(text, target_language='ko')
-    # print(names)
-    translated_text = result['translatedText'].replace('&amp;', '&')
-
-    # 캐시에 저장한다.
-    save_trans_cache(text, translated_text)
-
-    return translated_text
-
-
-def save_trans_cache(eng_text, kor_text):
-    if len(st.session_state.trans_text_list) >= 100:  # 100개 이하로 유지한다.
-        st.session_state.trans_text_list.pop(0)
-
-    st.session_state.trans_text_list.append((eng_text, kor_text))  # 번역 튜플을 리스트에 삽입
-    # 캐시 파일에 저장
-    with open(config.TRANS_CACHE_FILE, 'wb') as f_:
-        pickle.dump(st.session_state.trans_text_list, f_)
-        logging.info('번역 캐시 파일 업데이트 완료')
-
-
-def load_trans_cache(eng_text):
-    for e_txt, k_txt in st.session_state.trans_text_list:
-        if eng_text == e_txt:
-            return k_txt  # 캐시 힛
-    return None
+# def translate_eng_to_kor(text):
+#     # 캐시를 먼저 뒤져본다.
+#     cache_text = load_trans_cache(text)
+#     if cache_text:
+#         logging.info('trans cache hit! - ' + text + ' : ' + cache_text)
+#         return cache_text  # 캐시힛!
+#
+#     # 캐시에 없으면 구글 api로 번역을 한다.
+#     if not os.path.exists(config.KEY_PATH):
+#         return ''
+#
+#     credential_trans = service_account.Credentials.from_service_account_file(config.KEY_PATH)
+#     translate_client = translate.Client(credentials=credential_trans)
+#
+#     result = translate_client.translate(text, target_language='ko')
+#     # print(names)
+#     translated_text = result['translatedText'].replace('&amp;', '&')
+#
+#     # 캐시에 저장한다.
+#     save_trans_cache(text, translated_text)
+#
+#     return translated_text
+#
+#
+# def save_trans_cache(eng_text, kor_text):
+#     if len(st.session_state.trans_text_list) >= 100:  # 100개 이하로 유지한다.
+#         st.session_state.trans_text_list.pop(0)
+#
+#     st.session_state.trans_text_list.append((eng_text, kor_text))  # 번역 튜플을 리스트에 삽입
+#     # 캐시 파일에 저장
+#     with open(config.TRANS_CACHE_FILE, 'wb') as f_:
+#         pickle.dump(st.session_state.trans_text_list, f_)
+#         logging.info('번역 캐시 파일 업데이트 완료')
+#
+#
+# def load_trans_cache(eng_text):
+#     for e_txt, k_txt in st.session_state.trans_text_list:
+#         if eng_text == e_txt:
+#             return k_txt  # 캐시 힛
+#     return None
 
 
 # # # # # # # # # # # # # # #
@@ -345,20 +345,21 @@ st.sidebar.divider()
 st.sidebar.write('❓ https://downdetector.com')
 
 
-if not os.path.exists(config.KEY_PATH):
-    uploaded_file = st.sidebar.file_uploader('API Key File', type=['json'], accept_multiple_files=False)
-else:
-    logging.info('API key 파일은 로컬 저장된 파일 사용합니다.')
-    uploaded_file = None
+# 구글 번역 키
+# if not os.path.exists(config.KEY_PATH):
+#     uploaded_file = st.sidebar.file_uploader('API Key File', type=['json'], accept_multiple_files=False)
+# else:
+#     logging.info('API key 파일은 로컬 저장된 파일 사용합니다.')
+#     uploaded_file = None
 
 
 # key json 파일 업로드 처리
-if uploaded_file is not None:
-    # 파일을 로컬에 저장
-    with open(config.KEY_PATH, "wb") as file:
-        file.write(uploaded_file.getbuffer())
-
-    st.toast(f"API key file has been saved successfully!")
+# if uploaded_file is not None:
+#     # 파일을 로컬에 저장
+#     with open(config.KEY_PATH, "wb") as file:
+#         file.write(uploaded_file.getbuffer())
+#
+#     st.toast(f"API key file has been saved successfully!")
 
 
 # # # # # # # # # # # # # # #
