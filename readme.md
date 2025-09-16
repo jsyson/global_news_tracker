@@ -18,6 +18,9 @@ streamlit run main.py
 ```
 
 ## 프로젝트 구조
-- `main.py`: Streamlit 앱의 메인 실행 파일입니다.
-- `pages/`: 대시보드의 각 페이지를 구성하는 파일들이 위치합니다.
-- `requirements.txt`: 프로젝트에 필요한 Python 라이브러리 목록입니다.
+- `main.py`: Streamlit 앱의 메인 실행 파일
+- `pages/`: 대시보드의 각 페이지 구성
+- `config.py`: 각종 운용자 설정
+- `dashboard_dd.py`: 대시보드 화면 구성
+- `get_downdetector_web.py`: 웹사이트 크롤링 
+- `requirements.txt`: 프로젝트에 필요한 Python 라이브러리 목록
