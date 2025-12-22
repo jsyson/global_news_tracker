@@ -226,6 +226,7 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.subheader(f'Global Service Status - {area} {icon}')
+        st.caption(" by 정승용, 김경준")
 
         # Font Awesome CSS를 HTML에 추가
         # st.markdown(

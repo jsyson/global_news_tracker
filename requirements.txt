@@ -8,12 +8,12 @@ geopy~=2.4.1
 #google-cloud-translate==2.0.1
 lxml
 
-matplotlib~=3.8.2
-selenium~=4.23.1
+matplotlib
+selenium
 webdriver-manager
 selenium_stealth
 undetected-chromedriver
-seleniumbase
+#seleniumbase
 
 altair
 numpy
