@@ -17,6 +17,7 @@ import sys
 import logging
 import re
 import json
+from datetime import datetime
 # import matplotlib.pyplot as plt
 
 
@@ -132,7 +133,14 @@ def get_downdetector_df(url, area, service_name=None):
     try:
         CHROME_DRIVER.get(url)
     except Exception as e:
-        logging.error(f'크롬 get 에러 발생!!! - {url} - {area}')
+        now = datetime.now().strftime('%Y%m%d_%H%M%S')
+        screen_path = f'error_get_{area}_{now}.png'
+        try:
+            CHROME_DRIVER.save_screenshot(screen_path)
+            logging.error(f'크롬 get 에러 발생!!! 스크린샷 저장됨: {screen_path} - {url} - {area}')
+        except Exception as sce:
+            logging.error(f'스크린샷 저장 실패 (드라이버 응답 없음): {sce}')
+            
         logging.error(f"{e}")
 
         logging.info('CHROME_DRIVER 초기화 시작')
@@ -145,7 +153,14 @@ def get_downdetector_df(url, area, service_name=None):
         try:
             CHROME_DRIVER.get(url)
         except Exception as e:
-            logging.error(f'재시도 get도 에러 발생!!! - {url} - {area}')
+            now = datetime.now().strftime('%Y%m%d_%H%M%S')
+            screen_path = f'error_retry_{area}_{now}.png'
+            try:
+                CHROME_DRIVER.save_screenshot(screen_path)
+                logging.error(f'재시도 get도 에러 발생!!! 스크린샷 저장됨: {screen_path} - {url} - {area}')
+            except Exception as sce:
+                logging.error(f'재시도 스크린샷 저장 실패 (드라이버 응답 없음): {sce}')
+
             logging.error(f"{e}")
             return None
 
@@ -181,6 +196,7 @@ def get_downdetector_df(url, area, service_name=None):
             elif status == 'warning': impact_class = WARNING
             
             data.append({NAME: name, VALUES: sparkline_formatted, CLASS: impact_class})
+            logging.info({NAME: name, CLASS: impact_class})
             
         if data:
             logging.info(f"JSON 스크립트 방식으로 {len(data)}개의 서비스 추출 성공")
@@ -237,8 +253,25 @@ def get_downdetector_df(url, area, service_name=None):
     # 중복 제거 (JSON과 DOM 방식이 섞였을 경우 대비)
     df_ = df_.drop_duplicates(subset=[NAME])
 
-    df_sorted = df_.sort_values(by=CLASS, key=lambda x: x.map(get_impact_order), ascending=False)
-    df_sorted = df_sorted.reset_index(drop=True)
+    # 정렬을 위한 임시 컬럼 생성
+    # 1. 상태 우선순위 (DANGER: 3, WARNING: 2, SUCCESS: 1)
+    df_['status_priority'] = df_[CLASS].map(get_impact_order)
+    
+    # 2. 데이터 보유 우선순위 (데이터가 있거나 [0]이 아니면 1, 없으면 0)
+    def has_data(v):
+        if v is None or v == "" or v == "[0]" or v == "[]":
+            return 0
+        return 1
+    df_['data_priority'] = df_[VALUES].apply(has_data)
+
+    # 복합 정렬: 상태 우선 -> 데이터 보유 우선 -> 이름순
+    df_sorted = df_.sort_values(
+        by=['status_priority', 'data_priority', NAME], 
+        ascending=[False, False, True]
+    )
+    
+    # 임시 컬럼 삭제 및 인덱스 초기화
+    df_sorted = df_sorted.drop(columns=['status_priority', 'data_priority']).reset_index(drop=True)
     df_sorted[AREA] = area
     
     return df_sorted

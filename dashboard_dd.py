@@ -95,11 +95,30 @@ def display_dashboard(area):
 
     # 현재 알람 크롤링 + 레드 알람 목록 가져옴.
     alarm_list = config.get_current_alarm_service_list(area=area)
-    alarm_list.sort(key=lambda x: x.lower())  # abc 순으로 정렬
+    alarm_list.sort(key=lambda x: x.lower())  # DANGER 서비스들끼리 abc 순 정렬
+
+    # 나머지 서비스들에 대한 정렬 기준 설정 (차트 데이터 보유 여부)
+    status_df = st.session_state.status_df_dict.get(area)
+
+    def get_non_alarm_sort_key(name):
+        if status_df is not None:
+            # 대소문자 구분 없이(upper) Name 컬럼에서 해당 서비스 검색
+            match = status_df[status_df[config.get_downdetector_web.NAME].str.upper() == name.upper()]
+            if not match.empty:
+                val = match.iloc[0][config.get_downdetector_web.VALUES]
+                # 차트 데이터 유무 판별 ( [0], [], 빈값 등은 데이터 없음으로 간주 )
+                if val and val not in ["[0]", "[]", ""]:
+                    return (0, name.lower())  # 1순위: 데이터 있음
+                return (1, name.lower())      # 2순위: 데이터 없음
+        return (2, name.lower())              # 3순위: 정보 없음
 
     target_list = list(target_set)
-    target_list_filtered = [item for item in target_list if item not in alarm_list]
-    target_list_filtered.sort(key=lambda x: x.lower())  # abc 순으로 정렬
+    # 대소문자 구분 없이 알람 목록에 있는지 확인
+    alarm_list_upper = [a.upper() for a in alarm_list]
+    target_list_filtered = [item for item in target_list if item.upper() not in alarm_list_upper]
+    
+    # 차트 데이터 유무에 따른 정렬 적용
+    target_list_filtered.sort(key=get_non_alarm_sort_key)
 
     all_target_list = alarm_list + target_list_filtered
 
@@ -122,6 +141,17 @@ def display_dashboard(area):
             with st.container():
                 # 상태
                 _, color_code, _ = config.get_status_color(item, status)
+
+                # [수정] 차트 데이터가 없거나 최대값이 0인 성공 서비스는 연한 회색으로 표시
+                # status가 None이거나 SUCCESS인 경우 모두 포함
+                has_chart_data = False
+                if chart_list is not None and len(chart_list) > 0:
+                    if max(chart_list) > 0:
+                        has_chart_data = True
+                
+                is_success = (status == config.get_downdetector_web.SUCCESS or status is None)
+                if not has_chart_data and is_success:
+                    color_code = '#E0E0E0BB'  # 연한 회색 (Light Gray)
 
                 # print(st.session_state.companies_list_dict[area])
                 if item in st.session_state.companies_list_dict[area]:

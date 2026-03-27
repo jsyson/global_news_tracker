@@ -63,6 +63,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Amazon',
         'Amazon Web Services',
         'Amazon Prime Video',
+        'Anthropic',
         'AT&T',
         'Cloudflare',
         'Discord',
@@ -70,6 +71,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Facebook',
 
         'Gmail',
+        'Google Gemini',
         'Google',
         # 'Google Calendar',
         'Google Cloud',
@@ -80,6 +82,8 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Google Play',
         # 'Google Public DNS',
         # 'Google Workspace',
+
+        'Grok',
 
         'iCloud',
         'Instagram',
@@ -104,7 +108,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'X (Twitter)',
         'Yahoo',
         'Yahoo Mail',
-        'Youtube',
+        'YouTube',
         # 'Zoom',
     },
 
@@ -112,6 +116,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Akamai',
         'Amazon',
         'Amazon Web Services',
+
         'App Store',
         'Apple Store',
         'Cloudflare',
@@ -119,6 +124,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Facebook',
 
         'Gmail',
+        'Google Gemini',
         'Google',
         # 'Google Calendar',
         'Google Cloud',
@@ -129,6 +135,8 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Google Play',
         # 'Google Public DNS',
         # 'Google Workspace',
+
+        'Grok',
 
         'iCloud',
         'Instagram',
@@ -145,7 +153,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'X (Twitter)',
         'Yahoo',
         'Yahoo Mail',
-        'Youtube',
+        'YouTube',
         'Zoom',
     }
 }
@@ -296,14 +304,21 @@ def refresh_status_and_save_companies(area):
     # 세션상태 방어 코드
     init_session_state()
 
-    # 상태 받아오기
-    st.session_state.status_df_dict[area] = get_service_chart_df_by_url_list(area)
+    # 상태 받아오기 (하나라도 성공하면 DataFrame, 모두 실패하면 None 리턴)
+    new_status_df = get_service_chart_df_by_url_list(area)
 
-    if st.session_state.status_df_dict[area] is None or len(st.session_state.status_df_dict[area]) == 0:
-        logging.error(f'{area} status_df 갱신 실패!')
-        return
+    # [수정] 일부라도 크롤링에 성공했다면 기존 데이터를 버리고 새 데이터로 교체
+    if new_status_df is not None and len(new_status_df) > 0:
+        st.session_state.status_df_dict[area] = new_status_df
+        logging.info(f"{area} 일부 또는 전체 서비스 크롤링 성공 - 데이터 업데이트 완료")
+    else:
+        # [수정] 모든 서비스 크롤링에 실패했을 경우에만 기존 데이터 유지
+        logging.error(f"{area} 모든 서비스 크롤링 실패! (기존 데이터 유지)")
+        # 만약 기존 데이터도 없다면(최초 실행 실패 시) 더 이상 진행 불가
+        if st.session_state.status_df_dict.get(area) is None:
+            return
 
-    logging.info(f'{area} status_df 갱신 후 길이: {len(st.session_state.status_df_dict[area])}')
+    logging.info(f"{area} 현재 사용 데이터 길이: {len(st.session_state.status_df_dict[area])}")
 
     # 회사 목록 파일 업데이트
     new_list = list(st.session_state.status_df_dict[area][get_downdetector_web.NAME])
