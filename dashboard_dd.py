@@ -39,7 +39,7 @@ def display_chart(chart_list, color_code, chart_height=50, label_tick=False):
     # 최대값이 0이면 이대로 뿌려주고 끝낸다.
     if chart_data['Report Count'].max() == 0:
         # 차트를 Streamlit에 표시
-        st.altair_chart(line_chart, use_container_width=True)
+        st.altair_chart(line_chart, width="stretch")
         return
 
     # 최대값이 있을 경우 화면에 표시해준다.
@@ -74,7 +74,7 @@ def display_chart(chart_list, color_code, chart_height=50, label_tick=False):
     final_chart = line_chart + text
 
     # 차트를 Streamlit에 표시
-    st.altair_chart(final_chart, use_container_width=True)
+    st.altair_chart(final_chart, width="stretch")
 
 
 def click_button(area, selected_service_name):

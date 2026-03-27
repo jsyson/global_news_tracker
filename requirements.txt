@@ -1,19 +1,26 @@
-pandas~=2.2.2
-streamlit~=1.36.0
-requests~=2.31.0
-beautifulsoup4~=4.12.3
-feedparser~=6.0.11
-pytz~=2023.3.post1
-geopy~=2.4.1
-#google-cloud-translate==2.0.1
+pandas
+
+# 3.13 버전은 numpy 2.1 이상이 안정적
+numpy>=2.1.0
+
+# Python 3.13에서는 streamlit 1.40 이상 권장
+streamlit>=1.40.0
+requests
+beautifulsoup4
+feedparser
+pytz
+geopy
 lxml
-
 matplotlib
-selenium
-webdriver-manager
-selenium_stealth
-undetected-chromedriver
-#seleniumbase
-
 altair
-numpy
+
+
+# --- 셀레늄 관련 정리 ---
+# seleniumbase 하나만 깔면 selenium을 알아서 최신으로 가져옴.
+seleniumbase>=4.21.0
+PyVirtualDisplay>=3.0
+# undetected-chromedriver나 stealth는 seleniumbase와 충돌할 수 있으니
+# 꼭 필요하다면 버전 고정 없이 이름만 써준다.
+selenium-stealth
+undetected-chromedriver
+webdriver-manager

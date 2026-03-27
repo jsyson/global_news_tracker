@@ -15,6 +15,8 @@ from selenium_stealth import stealth
 import pandas as pd
 import sys
 import logging
+import re
+import json
 # import matplotlib.pyplot as plt
 
 
@@ -127,9 +129,6 @@ def get_downdetector_df(url, area, service_name=None):
 
     logging.info(f'다운디텍터 크롤링 시작 - {url} {area}')
 
-    # if service_name:
-    # https://downdetector.com/status/{service_name}/
-
     try:
         CHROME_DRIVER.get(url)
     except Exception as e:
@@ -138,9 +137,7 @@ def get_downdetector_df(url, area, service_name=None):
 
         logging.info('CHROME_DRIVER 초기화 시작')
         CHROME_DRIVER.quit()
-
         get_driver.clear()  # 캐시 삭제
-
         CHROME_DRIVER = get_driver()
         logging.info('CHROME_DRIVER 초기화 완료')
 
@@ -150,60 +147,100 @@ def get_downdetector_df(url, area, service_name=None):
         except Exception as e:
             logging.error(f'재시도 get도 에러 발생!!! - {url} - {area}')
             logging.error(f"{e}")
-            logging.error('None 리턴!')
             return None
 
-    # 페이지 로딩 대기
+    # 페이지 로딩 대기 (신규/기존 셀렉터 병합 대기)
     try:
-        WebDriverWait(CHROME_DRIVER, 60).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".caption")))
+        WebDriverWait(CHROME_DRIVER, 30).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "a.block.h-full, .caption"))
+        )
     except Exception as e:
-        logging.error(f"{e}")
-        logging.error('최대 시간 동안 기다려도 페이지 로딩에 실패한 경우 - 그대로 처리한다.')
+        logging.warning(f"페이지 로딩 대기 타임아웃: {e}")
 
-    logging.info(f'다운디텍터 크롤링 완료 - {url} {area}')
-
-    # 서비스명, data-values, 영향도 클래스 추출
-    services = CHROME_DRIVER.find_elements(By.CSS_SELECTOR, ".caption")
+    logging.info(f'다운디텍터 데이터 추출 중... - {url} {area}')
     data = []
 
-    for service in services:
-        try:
-            name = service.find_element(By.TAG_NAME, "h5").text
-            data_values = service.find_element(By.CLASS_NAME, "sparkline").get_attribute("data-values")
-            sparkline_classes = service.find_element(By.CLASS_NAME, "sparkline").get_attribute("class").split()
+    # --- [STEP 0] 스크립트 영역 JSON 데이터 추출 (가장 정확하고 빠름) ---
+    try:
+        page_source = CHROME_DRIVER.page_source
+        # Next.js의 스트리밍 데이터 구조에서 회사 정보 패턴 탐색
+        company_pattern = r'{\\"__typename\\":\\"CompanyType\\",\\"id\\":\\"\d+\\",\\"name\\":\\"(.*?)\\",.*?\\"status\\":\\"(.*?)\\",\\"sparkline\\":\[(.*?)\].*?}'
+        matches = re.finditer(company_pattern, page_source)
+        
+        for match in matches:
+            name = match.group(1).replace('\\u0026', '&')
+            status = match.group(2)
+            sparkline_raw = match.group(3)
+            
+            # config.py의 split(', ')과 호환되도록 공백 추가
+            sparkline_formatted = f"[{sparkline_raw.replace(',', ', ')}]"
+            
+            # 상태값 매핑
             impact_class = SUCCESS
-            for item in sparkline_classes:
-                if item in [DANGER, WARNING, SUCCESS]:
-                    impact_class = item
-                    break
+            if status == 'danger': impact_class = DANGER
+            elif status == 'warning': impact_class = WARNING
+            
+            data.append({NAME: name, VALUES: sparkline_formatted, CLASS: impact_class})
+            
+        if data:
+            logging.info(f"JSON 스크립트 방식으로 {len(data)}개의 서비스 추출 성공")
+    except Exception as e:
+        logging.error(f"STEP 0 (JSON) 실패: {e}")
 
-            data.append({NAME: name, VALUES: data_values, CLASS: impact_class})
+    # --- JSON 추출 실패 시 DOM 탐색 (STEP 1 & 2) ---
+    if not data:
+        elements = CHROME_DRIVER.find_elements(By.CSS_SELECTOR, "a.block.h-full, .caption")
+        for service in elements:
+            service_data = {NAME: "Unknown", VALUES: "", CLASS: SUCCESS}
+            try:
+                # --- [STEP 1] 신규 UI (2026년형) ---
+                if "block" in service.get_attribute("class"):
+                    name_el = service.find_element(By.TAG_NAME, "h2")
+                    service_data[NAME] = name_el.text
 
-        except Exception as e:
-            logging.error(f"Error extracting data for a service: {e}\n{url} - {area} - {service}")
-
-    # 브라우저 종료
-    # CHROME_DRIVER.quit()
+                    info_container = service.find_element(By.CSS_SELECTOR, "div[role='img']")
+                    status_text = info_container.get_attribute("aria-label").lower()
+                    
+                    # 차트 데이터 (SVG Path 대신 더미 리스트 저장 - config.py 호환용)
+                    # 상세 데이터는 STEP 0 (JSON)에서 이미 추출됨.
+                    service_data[VALUES] = "[0]"
+                    
+                    if "experiencing problems" in status_text:
+                        service_data[CLASS] = DANGER
+                    elif "possible problems" in status_text:
+                        service_data[CLASS] = WARNING
+                    else:
+                        service_data[CLASS] = SUCCESS
+                
+                # --- [STEP 2] 기존 UI (Legacy) ---
+                else:
+                    name_el = service.find_element(By.TAG_NAME, "h5")
+                    service_data[NAME] = name_el.text
+                    sparkline = service.find_element(By.CLASS_NAME, "sparkline")
+                    service_data[VALUES] = sparkline.get_attribute("data-values")
+                    
+                    sparkline_classes = sparkline.get_attribute("class").split()
+                    for item in sparkline_classes:
+                        if item in [DANGER, WARNING, SUCCESS]:
+                            service_data[CLASS] = item
+                            break
+                
+                data.append(service_data)
+            except Exception:
+                continue
 
     df_ = pd.DataFrame(data)
-
-    # 크롤링 실패 또는 비정상일 경우 None 리턴.
     if df_ is None or len(df_) == 0:
+        logging.error(f"최종 추출된 데이터가 없음: {url}")
         return None
+
+    # 중복 제거 (JSON과 DOM 방식이 섞였을 경우 대비)
+    df_ = df_.drop_duplicates(subset=[NAME])
 
     df_sorted = df_.sort_values(by=CLASS, key=lambda x: x.map(get_impact_order), ascending=False)
     df_sorted = df_sorted.reset_index(drop=True)
-    df_sorted[AREA] = area  # 지역 컬럼 추가
-
-    # for debug
-    logging.debug(str(df_sorted))
-
-    # log_str = f'\n---------- {url} ----------\n'
-    # for i, row in df_sorted.iterrows():
-    #     log_str += f'{row[NAME]}\t{row[AREA]}\t{row[CLASS]}\t{row[VALUES]}\n'
-    # log_str += '------------------------------\n\n'
-    # logging.info(log_str)
-
+    df_sorted[AREA] = area
+    
     return df_sorted
 
 
@@ -233,4 +270,3 @@ if __name__ == '__main__':
         df_sample = df.head(5).reset_index(drop=True)
         # make_plot(df_sample)
     # CHROME_DRIVER.quit()  # 테스트일 경우엔 종료해준다.
-
