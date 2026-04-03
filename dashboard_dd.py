@@ -127,11 +127,19 @@ def display_dashboard(area):
     # 차트 데이터 유무에 따른 정렬 적용
     target_list_filtered.sort(key=get_non_alarm_sort_key)
 
+    # 전체 리스트 합칠 때 중복 발생 방지
     all_target_list = alarm_list + target_list_filtered
+    
+    seen = set()
+    unique_all_target_list = []
+    for x in all_target_list:
+        if x.upper() not in seen:
+            unique_all_target_list.append(x)
+            seen.add(x.upper())
 
     dashboard_columns = st.columns(st.session_state.num_dashboard_columns)
 
-    for idx, item in enumerate(all_target_list):
+    for idx, item in enumerate(unique_all_target_list):
         col = dashboard_columns[idx % st.session_state.num_dashboard_columns]  # 순서대로 컬럼에 아이템 배치
         # logging.info(f'{area} 컬럼{idx} : {item=}')
 
@@ -150,7 +158,6 @@ def display_dashboard(area):
                 _, color_code, _ = config.get_status_color(item, status)
 
                 # [수정] 차트 데이터가 없거나 최대값이 0인 성공 서비스는 연한 회색으로 표시
-                # status가 None이거나 SUCCESS인 경우 모두 포함
                 has_chart_data = False
                 if chart_list is not None and len(chart_list) > 0:
                     if max(chart_list) > 0:
@@ -160,69 +167,65 @@ def display_dashboard(area):
                 if not has_chart_data and is_success:
                     color_code = '#E0E0E0BB'  # 연한 회색 (Light Gray)
 
-                # print(st.session_state.companies_list_dict[area])
                 if item in st.session_state.companies_list_dict[area]:
                     index_code = st.session_state.companies_list_dict[area].index(item)
                 else:
                     index_code = 'None'
-                    logging.error(f'{item}이 회사 목록에 없음!!!')
 
                 unique_id = f'btn-{re.sub(r"[^a-zA-Z]", "", item).lower()}-{area.lower()}-{index_code}'
-                logging.info(f'{item=} {unique_id}')
-
-                # 뉴스 개수 가져오기
                 news_count = st.session_state.news_count_cache.get(area, {}).get(item, 0)
-                badge_html = ""
-                if news_count > 0:
-                    badge_html = f'<div class="news-badge">{news_count}</div>'
 
+                # 1. 버튼 스타일 정의
                 st.markdown(f'<style>.element-container:has(#{unique_id})'
                             ' + div button '
                             """{
                     position: relative;
-                    font-size: 14px;   /* 글자 크기 조정 */
+                    font-size: 14px;
                     font-weight: bold;
                     line-height: 1.2;
-                    padding: 10px 5px; /* 안쪽 여백 */
+                    padding: 10px 5px;
                     margin: 0;
                     border: 0px solid #ccc;
                     background-color: """ + f'{color_code};' + """
                     text-align: center;
                     border-radius: 10px;
-                    width: 100% !important; /* 가로 길이 강제 100% */
-                    height: 50px !important; /* 세로 길이 고정 */
+                    width: 100% !important;
+                    height: 50px !important;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: black; /* 글자색 명시 */
+                    color: black;
                  }
                  </style>""", unsafe_allow_html=True)
 
+                # 2. 버튼 출력
                 st.markdown(f'<span id="{unique_id}"></span>', unsafe_allow_html=True)
                 if st.button(f"{item}", key=unique_id, on_click=click_button, args=(area, item,), use_container_width=True):
-                    logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
                     st.switch_page(config.NEWSBOT_PAGE)
 
+                # 3. 뉴스 배지 오버레이 (버튼 바로 위에 띄움)
                 if news_count > 0:
-                    # 버튼 위에 배지를 그리기 위해 오버레이 (버튼 높이 50px에 맞춰 위치 조정)
                     st.markdown(f"""
-                        <div style="position: relative; top: -45px; height: 0; pointer-events: none;">
-                            <div style="position: absolute; right: 5px; top: 0px; 
+                        <div style="position: relative; height: 0px; top: -45px; pointer-events: none; z-index: 1000;">
+                            <div style="position: absolute; right: 10px; 
                                         background-color: red; color: white; border-radius: 50%; 
                                         width: 22px; height: 22px; display: flex; 
                                         align-items: center; justify-content: center; 
                                         font-size: 12px; font-weight: bold;
-                                        box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
-                                        z-index: 10;">
+                                        box-shadow: 1px 1px 3px rgba(0,0,0,0.3);">
                                 {news_count}
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
 
+                # 4. 차트 출력 (버튼 아래에 배치)
                 if st.session_state.display_chart:
                     display_chart(chart_list, color_code)
+                
+                # 간격 조정
+                st.markdown('<div style="height: 5px;"></div>', unsafe_allow_html=True)
 
     with st.expander('Raw Data'):
         if area in st.session_state.status_df_dict:
@@ -293,7 +296,7 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.subheader(f'Global Service Status - {area} {icon}')
-        st.caption(" by 승용, 경준")
+        st.caption("Ver 2.0")
 
         # Font Awesome CSS를 HTML에 추가
         # st.markdown(
@@ -369,31 +372,22 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
 
     # 타이머를 표시할 위치 예약
     timer_placeholder = st.sidebar.empty()
-    news_timer_placeholder = st.sidebar.empty()
 
     # 카운트다운 초 계산
     if st.session_state.refresh_timer_cache <= 0:
         st.session_state.refresh_timer_cache = st.session_state.dashboard_refresh_timer * 60
     if st.session_state.auto_tab_timer_cache <= 0:
         st.session_state.auto_tab_timer_cache = st.session_state.dashboard_auto_tab_timer
-    if st.session_state.news_search_timer_cache <= 0:
-        st.session_state.news_search_timer_cache = st.session_state.news_search_timer_minute * 60
 
     # 뉴스 수동 새로고침 버튼
     if st.sidebar.button('뉴스 강제 새로고침'):
         config.background_news_search()
         st.rerun()
 
-    # 뉴스 검색 타이머 처리
-    if st.session_state.news_search_timer_cache < 0:
-        config.background_news_search()
-        st.session_state.news_search_timer_cache = st.session_state.news_search_timer_minute * 60
-
     # 타이머 실행
     while st.session_state.refresh_timer_cache >= 0:
-        # 타이머 갱신
-        timer_placeholder.markdown(f"⏳ Refresh까지 {st.session_state.refresh_timer_cache}초")
-        news_timer_placeholder.markdown(f"📰 뉴스 검색까지 {st.session_state.news_search_timer_cache}초")
+        # 타이머 갱신 (통합 타이머 하나만 표시)
+        timer_placeholder.markdown(f"⏳ 다음 갱신/전환까지 **{st.session_state.auto_tab_timer_cache}**초")
 
         # 1초 대기
         time.sleep(1)
@@ -401,18 +395,28 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
         # 타이머 감소
         st.session_state.refresh_timer_cache -= 1
         st.session_state.auto_tab_timer_cache -= 1
-        st.session_state.news_search_timer_cache -= 1
 
-        # 뉴스 검색 타이머가 다 되면 루프를 탈출하여 페이지 갱신 유도
-        if st.session_state.news_search_timer_cache < 0:
-            break
-
-        # 대시보드 전환 타이머 처리
-        if st.session_state.dashboard_auto_tab_timer > 0 > st.session_state.auto_tab_timer_cache:
+        # 대시보드 전환 및 뉴스 검색 트리거 (전환 주기 도달 시)
+        if st.session_state.dashboard_auto_tab_timer > 0 and st.session_state.auto_tab_timer_cache <= 0:
+            logging.info(f'화면 전환 및 뉴스 검색 시작: {area} -> Next')
+            
+            # 뉴스 검색 트리거
+            config.background_news_search()
+            
+            # 타이머 리셋
+            st.session_state.auto_tab_timer_cache = st.session_state.dashboard_auto_tab_timer
+            
+            # 페이지 전환
             if area == 'US':
                 st.switch_page(config.DASHBOARD_JP_PAGE)
             elif area == 'JP':
                 st.switch_page(config.DASHBOARD_US_PAGE)
+            break
+
+        # 서비스 전체 데이터 리프레시 주기 도달 시
+        if st.session_state.refresh_timer_cache < 0:
+            logging.info('서비스 데이터 리프레시 주기 도달')
+            break
 
     # 타이머 완료 메시지
     timer_placeholder.markdown("⏰ 카운트다운 완료! 서비스 상태 재검색!")

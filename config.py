@@ -217,7 +217,7 @@ def init_session_state():
 
     # 세션 정보 초기화(뉴스)
     if 'news_search_timer_minute' not in st.session_state:
-        st.session_state.news_search_timer_minute = 3
+        st.session_state.news_search_timer_minute = 1
 
     if 'news_search_timer_cache' not in st.session_state:
         st.session_state.news_search_timer_cache = -1
@@ -242,6 +242,16 @@ def init_session_state():
 
     if 'search_hour' not in st.session_state:
         st.session_state.search_hour = 1
+
+    if 'news_and_keywords' not in st.session_state:
+        st.session_state.news_and_keywords = ['outage']
+
+    if 'news_data_cache' not in st.session_state:
+        st.session_state.news_data_cache = dict()  # {area: {service_name: df}}
+
+    # 크롤링 제어 플래그
+    if 'refresh_done_dict' not in st.session_state:
+        st.session_state.refresh_done_dict = {area: False for area in AREA_LIST}
 
 
 # # # # # # # # # # # # # # #
@@ -322,19 +332,32 @@ def refresh_status_and_save_companies(area):
     # 세션상태 방어 코드
     init_session_state()
 
+    # 이번 회차에서 이미 시도했다면 중단
+    if st.session_state.refresh_done_dict.get(area, False):
+        return
+
     # 상태 받아오기 (하나라도 성공하면 DataFrame, 모두 실패하면 None 리턴)
     new_status_df = get_service_chart_df_by_url_list(area)
 
-    # [수정] 일부라도 크롤링에 성공했다면 기존 데이터를 버리고 새 데이터로 교체
+    # 시도 완료 플래그 설정 (실패하더라도 이번 루프에선 다시 안함)
+    st.session_state.refresh_done_dict[area] = True
+
+    # 일부라도 크롤링에 성공했다면 데이터 업데이트
     if new_status_df is not None and len(new_status_df) > 0:
         st.session_state.status_df_dict[area] = new_status_df
         logging.info(f"{area} 일부 또는 전체 서비스 크롤링 성공 - 데이터 업데이트 완료")
     else:
-        # [수정] 모든 서비스 크롤링에 실패했을 경우에만 기존 데이터 유지
-        logging.error(f"{area} 모든 서비스 크롤링 실패! (기존 데이터 유지)")
-        # 만약 기존 데이터도 없다면(최초 실행 실패 시) 더 이상 진행 불가
-        if st.session_state.status_df_dict.get(area) is None:
-            return
+        # 모든 서비스 크롤링에 실패했을 경우
+        if st.session_state.status_df_dict.get(area) is not None and len(st.session_state.status_df_dict[area]) > 0:
+            logging.error(f"{area} 모든 서비스 크롤링 실패! (이전 성공 데이터 유지)")
+        else:
+            logging.error(f"{area} 모든 서비스 크롤링 실패! (최초 실행 실패 - 데이터 없음)")
+            # 최초 실행 시 실패했다면 루프 방지를 위해 빈 DF라도 넣어줌
+            st.session_state.status_df_dict[area] = pd.DataFrame(columns=[get_downdetector_web.NAME, 
+                                                                         get_downdetector_web.CLASS, 
+                                                                         get_downdetector_web.VALUES, 
+                                                                         get_downdetector_web.AREA])
+        return 
 
     logging.info(f"{area} 현재 사용 데이터 길이: {len(st.session_state.status_df_dict[area])}")
 
@@ -362,9 +385,9 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
     # 세션상태 방어 코드
     init_session_state()
 
-    # 최초 로딩 시 또는 service_name None일 경우
-    if st.session_state.status_df_dict.get(area) is None or service_name is None:
-        logging.info(f'최초 로딩으로 예상 - 서비스 상태 크롤링 시작 {area=} {service_name=}')
+    # 이번 회차에 아직 크롤링 안했거나 최초 로딩인 경우
+    if not st.session_state.refresh_done_dict.get(area, False) or service_name is None:
+        logging.info(f'크롤링 필요 감지 - 시작 {area=} {service_name=}')
         refresh_status_and_save_companies(area)
 
     # 단순 크롤링 목적의 호출일 경우
@@ -372,20 +395,23 @@ def get_service_chart_mapdf(area, service_name=None, need_map=False):
         logging.info(f'크롤링 종료 - {area=}')
         return None, None, None
 
-    # 크롤링에 실패했을 경우
+    # 데이터가 아예 없는 경우 (최초 실행 실패 등)
     if st.session_state.status_df_dict.get(area) is None:
-        logging.error(f'서비스 상태 크롤링 실패!!! {area=} {service_name=}')
+        logging.error(f'데이터 없음!!! {area=} {service_name=}')
         return None, None, None
 
     for i, row in st.session_state.status_df_dict[area].iterrows():
         if row[get_downdetector_web.NAME].upper() == service_name.upper() \
                 and row[get_downdetector_web.AREA].upper() == area.upper():  # 대소문자 구분 없이 이름/지역 일치 찾음.
             # 서비스를 찾으면 클래스, 리포트 리스트, 지도를 리턴함.
-            if row[get_downdetector_web.VALUES] is None:
+            if row[get_downdetector_web.VALUES] is None or row[get_downdetector_web.VALUES] == "":
                 logging.info(f'{area} {service_name} 의 data_values 없음!')
                 data_values = None
             else:
-                data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
+                try:
+                    data_values = [int(x) for x in row[get_downdetector_web.VALUES].strip('[]').split(', ')]
+                except:
+                    data_values = None
             return row[get_downdetector_web.CLASS], data_values, None
 
     # 서비스를 못찾았을 경우
@@ -401,9 +427,8 @@ def get_current_alarm_service_list(area):
         logging.info('현재 알람 상태 없어서 크롤링 시작')
         get_service_chart_mapdf(area)  # 현재 값이 없을 경우 강제 크롤링 1회 수행.
 
-    if st.session_state.status_df_dict.get(area) is None:
-        # 크롤링에 실패했을 경우.
-        logging.error(f'크롤링 실패하여 현재 알람 상태 확인 불가!!!')
+    if st.session_state.status_df_dict.get(area) is None or len(st.session_state.status_df_dict[area]) == 0:
+        # 데이터가 아예 없을 경우.
         return []
 
     alarm_list = []
@@ -417,14 +442,15 @@ def get_current_alarm_service_list(area):
 
     logging.info(f'{area}의 Red 알람 서비스 목록: {alarm_list}')
 
-    # game들은 제외.
-
     return alarm_list
 
 
 def init_status_df():
-    logging.info('status_df_dict 초기화!')
-    st.session_state.status_df_dict = dict()
+    logging.info('status_df_dict 플래그 초기화! (데이터 유지)')
+    # 데이터를 삭제하지 않고 플래그만 초기화하여 다음 루프에서 새로고침 유도
+    for area in st.session_state.refresh_done_dict:
+        st.session_state.refresh_done_dict[area] = False
+    
     get_downdetector_web.get_downdetector_df.clear()
 
 
@@ -452,43 +478,89 @@ def get_status_color(name, status):
 # # # # # # # # # # # # # # #
 
 
-def get_news_count(keyword, search_hour=1):
-    query = keyword + ' outage'
+def get_google_news(keyword, search_hour=1, add_keywords=[]):
+    query = keyword
+    if add_keywords:
+        query += ' ' + ' '.join(add_keywords)
+    
+    logging.info(f"뉴스 검색중 : {query} ({search_hour}h)")
+
     url = f"https://news.google.com/rss/search?q={query}"
     if search_hour > 0:
         url += f"+when:{search_hour}h"
     url += f'&hl=en-US&gl=US&ceid=US:en'
     url = url.replace(' ', '%20')
 
+    title_list = []
+    source_list = []
+    pubtime_list = []
+    link_list = []
+
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             datas = feedparser.parse(res.text).entries
-            count = 0
             for data in datas:
-                if keyword.lower() in data.title.lower():
-                    count += 1
-            return count
+                title = data.title
+                # 제목에서 언론사 제거 (보통 ' - 언론사' 형태)
+                if ' - ' in title:
+                    minus_index = title.rindex(' - ')
+                    title = title[:minus_index].strip()
+
+                # 기사 제목에 검색 키워드가 없으면 넘긴다.
+                if keyword.lower() not in title.lower():
+                    continue
+
+                title_list.append(title)
+                source_list.append(data.source.title)
+                link_list.append(data.link)
+
+                # 시간 처리
+                pubtime = datetime.strptime(data.published, "%a, %d %b %Y %H:%M:%S %Z")
+                kst = pytz.timezone('Asia/Seoul')
+                pubtime = pubtime.replace(tzinfo=pytz.utc).astimezone(kst)
+                pubtime_list.append(pubtime.strftime('%Y-%m-%d %H:%M:%S'))
+
     except Exception as e:
         logging.error(f"뉴스 검색 오류 ({keyword}): {e}")
-    return 0
+    
+    result = {'제목': title_list, '언론사': source_list, '발행시간': pubtime_list, '링크': link_list}
+    return pd.DataFrame(result)
 
 
-def _news_search_task(area_list, news_count_cache, target_service_set_dict, search_hour):
+def _news_search_task(area_list, news_count_cache, news_data_cache, target_service_set_dict, search_hour, add_keywords):
     logging.info("===== [Thread] 백그라운드 뉴스 검색 시작 =====")
+    
+    # 1. 모든 지역의 서비스를 합쳐서 유니크한 목록 생성
+    all_unique_services = set()
+    for area in area_list:
+        all_unique_services.update(target_service_set_dict.get(area, set()))
+    
+    # 2. 유니크 서비스별로 뉴스 검색 수행 (한 번만)
+    temp_results = {}
+    for service_name in all_unique_services:
+        try:
+            df = get_google_news(service_name, search_hour, add_keywords)
+            temp_results[service_name] = df
+            time.sleep(0.3)  # API 부하 방지 (중복 제거로 여유가 생겼으므로 조금 더 대기)
+        except Exception as e:
+            logging.error(f"뉴스 검색 중 에러 ({service_name}): {e}")
+
+    # 3. 검색 결과를 각 지역별 캐시에 배분
     for area in area_list:
         if area not in news_count_cache:
             news_count_cache[area] = dict()
+        if area not in news_data_cache:
+            news_data_cache[area] = dict()
             
         target_set = target_service_set_dict.get(area, set())
         for service_name in target_set:
-            try:
-                count = get_news_count(service_name, search_hour)
-                news_count_cache[area][service_name] = count
-                time.sleep(0.2)  # API 부하 방지
-            except Exception as e:
-                logging.error(f"뉴스 검색 중 에러 ({service_name}): {e}")
-    logging.info("===== [Thread] 백그라운드 뉴스 검색 완료 =====")
+            if service_name in temp_results:
+                df = temp_results[service_name]
+                news_count_cache[area][service_name] = len(df)
+                news_data_cache[area][service_name] = df
+
+    logging.info(f"===== [Thread] 백그라운드 뉴스 검색 완료 (총 {len(all_unique_services)}개 서비스) =====")
 
 
 def background_news_search():
@@ -501,8 +573,10 @@ def background_news_search():
         args=(
             AREA_LIST,
             st.session_state.news_count_cache,
+            st.session_state.news_data_cache,
             st.session_state.target_service_set_dict,
-            st.session_state.search_hour
+            st.session_state.search_hour,
+            st.session_state.news_and_keywords
         ),
         daemon=True
     )

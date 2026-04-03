@@ -84,11 +84,14 @@ def get_driver():
 options = Options()
 options.add_argument("start-maximized")
 options.add_argument("--disable-gpu")
-options.add_argument("--headless")
-# options.add_argument("--headless=new")  # 최신 헤드리스 모드를 사용
+# 최신 헤드리스 모드 사용 (봇 탐지 회피에 유리)
+options.add_argument("--headless=new")
 
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
+# 실제 브라우저처럼 보이게 하기 위한 설정
+options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
 
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
@@ -103,10 +106,8 @@ options.add_argument('--allow-running-insecure-content')
 # 드라이버 초기화
 # # # # # # # # # #
 
-
-logging.info('CHROME_DRIVER 초기화 시작')
-CHROME_DRIVER = get_driver()
-logging.info('CHROME_DRIVER 초기화 완료')
+def get_active_driver():
+    return get_driver()
 
 
 # # # # # # # # # # # # # # # # # # # #
@@ -127,63 +128,74 @@ def get_impact_order(impact_class):
 # 다운디텍터 크롤링
 @st.cache_data(show_spinner='서비스 상태 업데이트 중...')
 def get_downdetector_df(url, area, service_name=None):
-    global CHROME_DRIVER
+    driver = get_active_driver()
 
     logging.info(f'다운디텍터 크롤링 시작 - {url} {area}')
 
     try:
-        CHROME_DRIVER.get(url)
+        # 첫 시도 시 메인 도메인 워밍업 (미국 사이트 대응)
+        # if area.upper() == 'US' and 'online-services' not in url and 'telecom' not in url:
+        #      logging.info("미국 사이트 워밍업 방문 시도...")
+        #      driver.get("https://downdetector.com/")
+        #      time.sleep(3)
+
+        driver.get(url)
     except Exception as e:
         now = datetime.now().strftime('%Y%m%d_%H%M%S')
         screen_path = f'error_get_{area}_{now}.png'
         try:
-            CHROME_DRIVER.save_screenshot(screen_path)
+            driver.save_screenshot(screen_path)
             logging.error(f'크롬 get 에러 발생!!! 스크린샷 저장됨: {screen_path} - {url} - {area}')
         except Exception as sce:
             logging.error(f'스크린샷 저장 실패 (드라이버 응답 없음): {sce}')
             
         logging.error(f"{e}")
 
-        logging.info('CHROME_DRIVER 초기화 시작')
-        CHROME_DRIVER.quit()
+        logging.info('CHROME_DRIVER 재초기화 시작')
         get_driver.clear()  # 캐시 삭제
-        CHROME_DRIVER = get_driver()
-        logging.info('CHROME_DRIVER 초기화 완료')
+        driver = get_driver()
+        logging.info('CHROME_DRIVER 재초기화 완료')
 
         logging.info('1회 재시도!!!')
         try:
-            CHROME_DRIVER.get(url)
+            driver.get(url)
         except Exception as e:
-            now = datetime.now().strftime('%Y%m%d_%H%M%S')
-            screen_path = f'error_retry_{area}_{now}.png'
-            try:
-                CHROME_DRIVER.save_screenshot(screen_path)
-                logging.error(f'재시도 get도 에러 발생!!! 스크린샷 저장됨: {screen_path} - {url} - {area}')
-            except Exception as sce:
-                logging.error(f'재시도 스크린샷 저장 실패 (드라이버 응답 없음): {sce}')
-
-            logging.error(f"{e}")
+            logging.error(f"재시도 실패: {e}")
             return None
 
-    # 페이지 로딩 대기 (신규/기존 셀렉터 병합 대기)
+    # 페이지 로딩 대기
     try:
         logging.info(f"페이지 로딩 대기 시작... (30s) - {url}")
-        WebDriverWait(CHROME_DRIVER, 30).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "a.block.h-full, .caption, h2, h5"))
+        # 구체적인 데이터 관련 엘리먼트가 나타날 때까지 대기 (보안 페이지 통과 확인용)
+        # 1. Next.js 데이터 스크립트 또는 2. 서비스 타일 컨테이너
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "script#__NEXT_DATA__, .company-tile, a.block.h-full"))
         )
-        time.sleep(2) # 추가 렌더링 대기
+        time.sleep(3) # JS 실행 및 데이터 렌더링을 위한 추가 여유 시간
     except Exception as e:
-        logging.warning(f"페이지 로딩 대기 타임아웃 또는 오류 (무시하고 진행): {e}")
+        logging.warning(f"페이지 로딩 대기 타임아웃 또는 오류: {e}")
 
     logging.info(f'다운디텍터 데이터 추출 중... - {url} {area}')
+    page_source = driver.page_source
+    
+    # 보안 차단(Cloudflare) 여부 확인
+    # if "Just a moment..." in page_source or "Cloudflare" in page_source:
+    #     logging.error("🚨 Cloudflare 보안 장벽에 막혔습니다. (봇 탐지됨)")
+    #     logging.error(page_source)
+    #     return None
+
     data = []
 
-    # --- [STEP 0] 스크립트 영역 JSON 데이터 추출 (가장 정확하고 빠름) ---
+    # --- [STEP 0] 스크립트 영역 JSON 데이터 추출 ---
     try:
-        page_source = CHROME_DRIVER.page_source
         # Next.js의 스트리밍 데이터 구조에서 회사 정보 패턴 탐색
         company_pattern = r'{\\"__typename\\":\\"CompanyType\\",\\"id\\":\\"\d+\\",\\"name\\":\\"(.*?)\\",.*?\\"status\\":\\"(.*?)\\",\\"sparkline\\":\[(.*?)\].*?}'
-        matches = re.finditer(company_pattern, page_source)
+        matches = list(re.finditer(company_pattern, page_source))
+        
+        if not matches:
+            logging.warning(f"추출된 데이터가 없음. (Title: {driver.title})")
+            # 디버깅을 위해 소스 앞부분 출력
+            logging.debug(f"Page Source Snippet: {page_source[:500]}")
         
         for match in matches:
             name = match.group(1).replace('\\u0026', '&')
@@ -208,7 +220,7 @@ def get_downdetector_df(url, area, service_name=None):
 
     # --- JSON 추출 실패 시 DOM 탐색 (STEP 1 & 2) ---
     if not data:
-        elements = CHROME_DRIVER.find_elements(By.CSS_SELECTOR, "a.block.h-full, .caption")
+        elements = driver.find_elements(By.CSS_SELECTOR, "a.block.h-full, .caption")
         for service in elements:
             service_data = {NAME: "Unknown", VALUES: "", CLASS: SUCCESS}
             try:

@@ -32,71 +32,6 @@ config.init_session_state()
 # # # # # # # # # #
 
 
-def get_google_outage_news(keyword_):
-    query = keyword_
-    if and_keyword:
-        query += ' AND ' + and_keyword[0]
-
-    logging.info(f"구글 뉴스 검색. query: {query}")
-    url = f"https://news.google.com/rss/search?q={query}"
-
-    if search_hour:
-        url += f"+when:{search_hour}h"
-
-    url += f'&hl=en-US&gl=US&ceid=US:en'
-    url = url.replace(' ', '%20')
-
-    title_list = []
-    source_list = []
-    pubtime_list = []
-    link_list = []
-
-    try:
-        res = requests.get(url)  # , verify=False)
-        logging.info('원본 링크: ' + url)
-
-        if res.status_code == 200:
-            datas = feedparser.parse(res.text).entries
-            for data in datas:
-                title = data.title
-                logging.info('구글뉴스제목(원본): ' + title)
-
-                minus_index = title.rindex(' - ')
-                title = title[:minus_index].strip()
-
-                # 기사 제목에 검색 키워드가 없으면 넘긴다.
-                if keyword_.lower() not in title.lower():
-                    continue
-
-                title_list.append(title)
-                source_list.append(data.source.title)
-                link_list.append(data.link)
-
-                pubtime = datetime.strptime(data.published, "%a, %d %b %Y %H:%M:%S %Z")
-                # GMT+9 (Asia/Seoul)으로 변경
-                gmt_plus_9 = pytz.FixedOffset(540)  # 9 hours * 60 minutes = 540 minutes
-                pubtime = pubtime.replace(tzinfo=pytz.utc).astimezone(gmt_plus_9)
-
-                pubtime_str = pubtime.strftime('%Y-%m-%d %H:%M:%S')
-                pubtime_list.append(pubtime_str)
-
-        else:
-            logging.error("Google 뉴스 수집 실패! Error Code: " + str(res.status_code))
-            logging.error(str(res))
-            return None
-
-    except Exception as e:
-        logging.error(e)
-        logging.error("Google 뉴스 RSS 피드 조회 오류 발생!")
-        return None
-
-    # 결과를 dict 형태로 저장
-    result = {'제목': title_list, '언론사': source_list, '발행시간': pubtime_list, '링크': link_list}
-
-    df = pd.DataFrame(result)
-    return df
-
-
 def display_news_df(ndf, keyword_):
     # st.divider()
     kst = pytz.timezone('Asia/Seoul')
@@ -145,15 +80,14 @@ def display_news_df(ndf, keyword_):
 
 def fetch_news(keyword_, infinite_loop=False):
     with st.spinner('뉴스 검색중...'):
-        news_df_ = get_google_outage_news(keyword_)
-        # st.write(news_df_)
+        # config에 정의된 공용 함수 사용
+        news_df_ = config.get_google_news(keyword_, st.session_state.search_hour, st.session_state.news_and_keywords)
         display_news_df(news_df_, keyword_)
 
     while infinite_loop:
         time.sleep(st.session_state.search_interval_min * 60)
         with st.spinner('뉴스 검색중...'):
-            news_df_ = get_google_outage_news(keyword_)
-            # st.write(news_df_)
+            news_df_ = config.get_google_news(keyword_, st.session_state.search_hour, st.session_state.news_and_keywords)
             display_news_df(news_df_, keyword_)
 
 
@@ -338,7 +272,8 @@ search_hour = st.session_state.search_hour
 
 and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드 (1개만 적용 가능)",
                                      options=['outage', 'blackout', 'failure'],
-                                     default=['outage'])
+                                     default=st.session_state.news_and_keywords)
+st.session_state.news_and_keywords = and_keyword
 
 st.session_state.search_interval_min = st.sidebar.number_input('새로고침 주기(분)',
                                                                value=st.session_state.search_interval_min,
@@ -410,7 +345,16 @@ if service_code_name:
     with col1_placeholder.container():
         st.session_state.news_list = []  # 뉴스 세션 클리어
         st.write('📰 News List')
-        fetch_news(service_code_name)
+        
+        # 캐시된 뉴스가 있다면 먼저 보여준다.
+        cached_df = st.session_state.news_data_cache.get(st.session_state.selected_area, {}).get(service_code_name)
+        
+        if cached_df is not None and len(cached_df) > 0:
+            logging.info(f"캐시된 뉴스 사용: {service_code_name}")
+            display_news_df(cached_df, service_code_name)
+        else:
+            # 캐시가 없으면 새로 검색
+            fetch_news(service_code_name)
 
 
 # 주기적으로 페이지를 새로고침한다.
