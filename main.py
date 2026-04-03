@@ -23,9 +23,8 @@ config.init_session_state()
 
 def help_page():
     st.title('Global Service Status')
-    # st.write('도움말')
-    st.write('- 버전: 2026-03-27')
-    st.write('- 개발: 정승용 (Feat. 김경준)')
+    st.write('- 버전: 2026-04-03')
+    st.write('- 개발: 정승용')
 
 
 pg = st.navigation([

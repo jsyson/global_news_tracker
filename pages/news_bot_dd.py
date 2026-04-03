@@ -37,6 +37,7 @@ def get_google_outage_news(keyword_):
     if and_keyword:
         query += ' AND ' + and_keyword[0]
 
+    logging.info(f"구글 뉴스 검색. query: {query}")
     url = f"https://news.google.com/rss/search?q={query}"
 
     if search_hour:
@@ -331,7 +332,9 @@ service_code_name = st.sidebar.selectbox(
 )
 
 
-search_hour = st.sidebar.number_input('최근 몇시간 뉴스를 검색할까요? (0=무제한)', value=1, format='%d')
+st.session_state.search_hour = st.sidebar.number_input('최근 몇시간 뉴스를 검색할까요? (0=무제한)', 
+                                                      value=st.session_state.search_hour, format='%d')
+search_hour = st.session_state.search_hour
 
 and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드 (1개만 적용 가능)",
                                      options=['outage', 'blackout', 'failure'],

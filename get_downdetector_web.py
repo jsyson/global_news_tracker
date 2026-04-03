@@ -16,6 +16,7 @@ import pandas as pd
 import sys
 import logging
 import re
+import time
 import json
 from datetime import datetime
 # import matplotlib.pyplot as plt
@@ -166,11 +167,13 @@ def get_downdetector_df(url, area, service_name=None):
 
     # 페이지 로딩 대기 (신규/기존 셀렉터 병합 대기)
     try:
+        logging.info(f"페이지 로딩 대기 시작... (30s) - {url}")
         WebDriverWait(CHROME_DRIVER, 30).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "a.block.h-full, .caption"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, "a.block.h-full, .caption, h2, h5"))
         )
+        time.sleep(2) # 추가 렌더링 대기
     except Exception as e:
-        logging.warning(f"페이지 로딩 대기 타임아웃: {e}")
+        logging.warning(f"페이지 로딩 대기 타임아웃 또는 오류 (무시하고 진행): {e}")
 
     logging.info(f'다운디텍터 데이터 추출 중... - {url} {area}')
     data = []

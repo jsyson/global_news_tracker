@@ -6,6 +6,12 @@ import time
 import pandas as pd
 from datetime import datetime
 import pytz
+import feedparser
+import requests
+import re
+
+
+import threading
 
 
 # 한국 시간대를 사용하여 시간 생성
@@ -210,6 +216,15 @@ def init_session_state():
         st.session_state.display_chart = True
 
     # 세션 정보 초기화(뉴스)
+    if 'news_search_timer_minute' not in st.session_state:
+        st.session_state.news_search_timer_minute = 3
+
+    if 'news_search_timer_cache' not in st.session_state:
+        st.session_state.news_search_timer_cache = -1
+
+    if 'news_count_cache' not in st.session_state:
+        st.session_state.news_count_cache = dict()  # {area: {service_name: count}}
+
     if "geolocations_dict" not in st.session_state:
         st.session_state.geolocations_dict = pickle_load_cache_file(GEOLOC_CACHE_FILE, dict)
 
@@ -224,6 +239,9 @@ def init_session_state():
 
     if 'search_interval_min' not in st.session_state:
         st.session_state.search_interval_min = 5
+
+    if 'search_hour' not in st.session_state:
+        st.session_state.search_hour = 1
 
 
 # # # # # # # # # # # # # # #
@@ -427,4 +445,66 @@ def get_status_color(name, status):
         # st.toast(f'**{name}** 서비스 문제 발생!', icon="🚨")
 
     return color, color_code, icon
+
+
+# # # # # # # # # # # # # # #
+# 뉴스 검색 관련 공용 함수
+# # # # # # # # # # # # # # #
+
+
+def get_news_count(keyword, search_hour=1):
+    query = keyword + ' outage'
+    url = f"https://news.google.com/rss/search?q={query}"
+    if search_hour > 0:
+        url += f"+when:{search_hour}h"
+    url += f'&hl=en-US&gl=US&ceid=US:en'
+    url = url.replace(' ', '%20')
+
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            datas = feedparser.parse(res.text).entries
+            count = 0
+            for data in datas:
+                if keyword.lower() in data.title.lower():
+                    count += 1
+            return count
+    except Exception as e:
+        logging.error(f"뉴스 검색 오류 ({keyword}): {e}")
+    return 0
+
+
+def _news_search_task(area_list, news_count_cache, target_service_set_dict, search_hour):
+    logging.info("===== [Thread] 백그라운드 뉴스 검색 시작 =====")
+    for area in area_list:
+        if area not in news_count_cache:
+            news_count_cache[area] = dict()
+            
+        target_set = target_service_set_dict.get(area, set())
+        for service_name in target_set:
+            try:
+                count = get_news_count(service_name, search_hour)
+                news_count_cache[area][service_name] = count
+                time.sleep(0.2)  # API 부하 방지
+            except Exception as e:
+                logging.error(f"뉴스 검색 중 에러 ({service_name}): {e}")
+    logging.info("===== [Thread] 백그라운드 뉴스 검색 완료 =====")
+
+
+def background_news_search():
+    # 세션 상태 방어
+    init_session_state()
+    
+    # 별도 스레드에서 실행 (UI 블로킹 방지)
+    thread = threading.Thread(
+        target=_news_search_task,
+        args=(
+            AREA_LIST,
+            st.session_state.news_count_cache,
+            st.session_state.target_service_set_dict,
+            st.session_state.search_hour
+        ),
+        daemon=True
+    )
+    thread.start()
 

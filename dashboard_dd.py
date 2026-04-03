@@ -86,9 +86,16 @@ def click_button(area, selected_service_name):
 
 # 대시보드 구성 함수
 def display_dashboard(area):
+    # 세션 상태 방어 코드 강제 실행
+    config.init_session_state()
+
     # 최초 캐시 세션 생성
     if st.session_state.status_cache.get(area) is None:
         st.session_state.status_cache[area] = dict()
+
+    if area not in st.session_state.target_service_set_dict:
+        logging.error(f"target_service_set_dict에 {area} 키가 없음! 초기값으로 복구 시도.")
+        st.session_state.target_service_set_dict[area] = config.DEFAULT_COMPANIES_SET_DICT.get(area, set())
 
     target_set = st.session_state.target_service_set_dict[area]
     logging.info(f'{area} 대시보드 구성 시작: {len(target_set)}개 서비스')
@@ -163,35 +170,65 @@ def display_dashboard(area):
                 unique_id = f'btn-{re.sub(r"[^a-zA-Z]", "", item).lower()}-{area.lower()}-{index_code}'
                 logging.info(f'{item=} {unique_id}')
 
+                # 뉴스 개수 가져오기
+                news_count = st.session_state.news_count_cache.get(area, {}).get(item, 0)
+                badge_html = ""
+                if news_count > 0:
+                    badge_html = f'<div class="news-badge">{news_count}</div>'
+
                 st.markdown(f'<style>.element-container:has(#{unique_id})'
                             ' + div button '
                             """{
-                    font-size: 3px;   /* 글자 크기 */
-                    line-height: 1;
-                    padding: 0px 10px; /* 버튼 안쪽 여백 (위/아래, 좌/우) */
-                    margin: 0;       /* 버튼 바깥쪽 여백 */
-                    border: 0px solid #ccc; /* 테두리 설정 */"""
-                            f'background-color: {color_code}; /* 배경색 설정 */\n'
-                            """
-                    text-align: center;/* 텍스트 가운데 정렬 */
-                    border-radius: 10px; /* 모서리 둥글게 */
-                    width: 100%; /* 버튼의 너비를 100%로 설정 */
-                    height: 100%;
-                 }</style>""", unsafe_allow_html=True)
+                    position: relative;
+                    font-size: 14px;   /* 글자 크기 조정 */
+                    font-weight: bold;
+                    line-height: 1.2;
+                    padding: 10px 5px; /* 안쪽 여백 */
+                    margin: 0;
+                    border: 0px solid #ccc;
+                    background-color: """ + f'{color_code};' + """
+                    text-align: center;
+                    border-radius: 10px;
+                    width: 100% !important; /* 가로 길이 강제 100% */
+                    height: 50px !important; /* 세로 길이 고정 */
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: black; /* 글자색 명시 */
+                 }
+                 </style>""", unsafe_allow_html=True)
 
                 st.markdown(f'<span id="{unique_id}"></span>', unsafe_allow_html=True)
-                if st.button(f"{item}", key=unique_id, on_click=click_button, args=(area, item,)):
+                if st.button(f"{item}", key=unique_id, on_click=click_button, args=(area, item,), use_container_width=True):
                     logging.info(f'버튼 눌림!!! {area=} {item=} {unique_id=}')
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
-                    # st.session_state.dashboard_button_clicked = True
                     st.switch_page(config.NEWSBOT_PAGE)
+
+                if news_count > 0:
+                    # 버튼 위에 배지를 그리기 위해 오버레이 (버튼 높이 50px에 맞춰 위치 조정)
+                    st.markdown(f"""
+                        <div style="position: relative; top: -45px; height: 0; pointer-events: none;">
+                            <div style="position: absolute; right: 5px; top: 0px; 
+                                        background-color: red; color: white; border-radius: 50%; 
+                                        width: 22px; height: 22px; display: flex; 
+                                        align-items: center; justify-content: center; 
+                                        font-size: 12px; font-weight: bold;
+                                        box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+                                        z-index: 10;">
+                                {news_count}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                 if st.session_state.display_chart:
                     display_chart(chart_list, color_code)
 
     with st.expander('Raw Data'):
-        st.write(st.session_state.status_df_dict[area])
+        if area in st.session_state.status_df_dict:
+            st.write(st.session_state.status_df_dict[area])
+        else:
+            st.write(f"{area} 전체 크롤링 실패!")
 
     logging.info(f'{area} 대시보드 구성 완료.\n')
 
@@ -332,17 +369,31 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
 
     # 타이머를 표시할 위치 예약
     timer_placeholder = st.sidebar.empty()
+    news_timer_placeholder = st.sidebar.empty()
 
     # 카운트다운 초 계산
     if st.session_state.refresh_timer_cache <= 0:
         st.session_state.refresh_timer_cache = st.session_state.dashboard_refresh_timer * 60
     if st.session_state.auto_tab_timer_cache <= 0:
         st.session_state.auto_tab_timer_cache = st.session_state.dashboard_auto_tab_timer
+    if st.session_state.news_search_timer_cache <= 0:
+        st.session_state.news_search_timer_cache = st.session_state.news_search_timer_minute * 60
+
+    # 뉴스 수동 새로고침 버튼
+    if st.sidebar.button('뉴스 강제 새로고침'):
+        config.background_news_search()
+        st.rerun()
+
+    # 뉴스 검색 타이머 처리
+    if st.session_state.news_search_timer_cache < 0:
+        config.background_news_search()
+        st.session_state.news_search_timer_cache = st.session_state.news_search_timer_minute * 60
 
     # 타이머 실행
     while st.session_state.refresh_timer_cache >= 0:
         # 타이머 갱신
         timer_placeholder.markdown(f"⏳ Refresh까지 {st.session_state.refresh_timer_cache}초")
+        news_timer_placeholder.markdown(f"📰 뉴스 검색까지 {st.session_state.news_search_timer_cache}초")
 
         # 1초 대기
         time.sleep(1)
@@ -350,6 +401,11 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
         # 타이머 감소
         st.session_state.refresh_timer_cache -= 1
         st.session_state.auto_tab_timer_cache -= 1
+        st.session_state.news_search_timer_cache -= 1
+
+        # 뉴스 검색 타이머가 다 되면 루프를 탈출하여 페이지 갱신 유도
+        if st.session_state.news_search_timer_cache < 0:
+            break
 
         # 대시보드 전환 타이머 처리
         if st.session_state.dashboard_auto_tab_timer > 0 > st.session_state.auto_tab_timer_cache:
