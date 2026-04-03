@@ -186,16 +186,14 @@ def init_session_state():
         st.session_state.dashboard_button_clicked = False
 
     if 'dashboard_auto_tab_timer' not in st.session_state:
-        st.session_state.dashboard_auto_tab_timer = 60
+        st.session_state.dashboard_auto_tab_timer = 180 # 기본 3분으로 연장
 
     if 'auto_tab_timer_cache' not in st.session_state:
+
         st.session_state.auto_tab_timer_cache = -1
 
     if 'status_df_dict' not in st.session_state:
         st.session_state.status_df_dict = dict()
-
-    if 'game_df_dict' not in st.session_state:
-        st.session_state.game_df_dict = dict()
 
     if 'target_service_set_dict' not in st.session_state:
         st.session_state.target_service_set_dict = DEFAULT_COMPANIES_SET_DICT
@@ -216,12 +214,6 @@ def init_session_state():
         st.session_state.display_chart = True
 
     # 세션 정보 초기화(뉴스)
-    if 'news_search_timer_minute' not in st.session_state:
-        st.session_state.news_search_timer_minute = 1
-
-    if 'news_search_timer_cache' not in st.session_state:
-        st.session_state.news_search_timer_cache = -1
-
     if 'news_count_cache' not in st.session_state:
         st.session_state.news_count_cache = dict()  # {area: {service_name: count}}
 
@@ -480,8 +472,10 @@ def get_status_color(name, status):
 
 def get_google_news(keyword, search_hour=1, add_keywords=[]):
     query = keyword
-    if add_keywords:
-        query += ' ' + ' '.join(add_keywords)
+
+    # 추가 조건 (outage 등) - debug를 위해 일단 제외
+    # if add_keywords:
+    #     query += ' ' + ' '.join(add_keywords)
     
     logging.info(f"뉴스 검색중 : {query} ({search_hour}h)")
 
@@ -496,30 +490,39 @@ def get_google_news(keyword, search_hour=1, add_keywords=[]):
     pubtime_list = []
     link_list = []
 
+    # 실제 브라우저처럼 보이기 위한 헤더 추가
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    }
+
     try:
-        res = requests.get(url, timeout=5)
+        # 타임아웃을 15초로 연장
+        res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             datas = feedparser.parse(res.text).entries
             for data in datas:
                 title = data.title
-                # 제목에서 언론사 제거 (보통 ' - 언론사' 형태)
                 if ' - ' in title:
                     minus_index = title.rindex(' - ')
                     title = title[:minus_index].strip()
 
-                # 기사 제목에 검색 키워드가 없으면 넘긴다.
-                if keyword.lower() not in title.lower():
+                # 기사 제목에 검색 키워드 검사 (공백 무시 비교로 매칭률 향상)
+                clean_keyword = keyword.lower().replace(" ", "")
+                clean_title = title.lower().replace(" ", "")
+                
+                if clean_keyword not in clean_title:
                     continue
 
                 title_list.append(title)
                 source_list.append(data.source.title)
                 link_list.append(data.link)
 
-                # 시간 처리
                 pubtime = datetime.strptime(data.published, "%a, %d %b %Y %H:%M:%S %Z")
                 kst = pytz.timezone('Asia/Seoul')
                 pubtime = pubtime.replace(tzinfo=pytz.utc).astimezone(kst)
                 pubtime_list.append(pubtime.strftime('%Y-%m-%d %H:%M:%S'))
+        else:
+            logging.error(f"구글 뉴스 응답 에러: {res.status_code}")
 
     except Exception as e:
         logging.error(f"뉴스 검색 오류 ({keyword}): {e}")
@@ -528,46 +531,58 @@ def get_google_news(keyword, search_hour=1, add_keywords=[]):
     return pd.DataFrame(result)
 
 
-def _news_search_task(area_list, news_count_cache, news_data_cache, target_service_set_dict, search_hour, add_keywords):
+def _news_search_task(area_list, news_count_cache, news_data_cache, target_service_set_dict, status_df_dict, search_hour, add_keywords):
     logging.info("===== [Thread] 백그라운드 뉴스 검색 시작 =====")
     
-    # 1. 모든 지역의 서비스를 합쳐서 유니크한 목록 생성
-    all_unique_services = set()
+    # 1. 이슈가 있는 모든 서비스(DANGER/WARNING) 추출
+    # 감시 목록에 있든 없든, 현재 대시보드에 장애로 뜬 모든 것을 대상으로 합니다.
+    search_targets_set = set()
     for area in area_list:
-        all_unique_services.update(target_service_set_dict.get(area, set()))
+        if area in status_df_dict:
+            df = status_df_dict[area]
+            if not df.empty:
+                # SUCCESS(정상)가 아닌 모든 서비스의 이름을 가져옵니다.
+                issues = df[df[get_downdetector_web.CLASS] != get_downdetector_web.SUCCESS][get_downdetector_web.NAME].tolist()
+                search_targets_set.update(issues)
     
-    # 2. 유니크 서비스별로 뉴스 검색 수행 (한 번만)
+    # 리스트로 변환
+    search_targets = list(search_targets_set)
+    
+    if not search_targets:
+        logging.info("현재 장애가 발생한 서비스가 없어 자동 뉴스 검색을 건너뜁니다.")
+        return
+
+    logging.info(f"뉴스 검색 대상 확정 (총 {len(search_targets)}개): {search_targets}")
+
+    # 2. 검색 수행
     temp_results = {}
-    for service_name in all_unique_services:
+    for service_name in search_targets:
         try:
             df = get_google_news(service_name, search_hour, add_keywords)
             temp_results[service_name] = df
-            time.sleep(0.3)  # API 부하 방지 (중복 제거로 여유가 생겼으므로 조금 더 대기)
+            time.sleep(1.5) # 구글 차단 방지용 간격
         except Exception as e:
-            logging.error(f"뉴스 검색 중 에러 ({service_name}): {e}")
+            logging.error(f"뉴스 검색 에러 ({service_name}): {e}")
+            time.sleep(3.0)
 
-    # 3. 검색 결과를 각 지역별 캐시에 배분
+    # 3. 결과 배분 (해당 서비스가 속한 모든 지역 캐시에 반영)
     for area in area_list:
-        if area not in news_count_cache:
-            news_count_cache[area] = dict()
-        if area not in news_data_cache:
-            news_data_cache[area] = dict()
+        if area not in news_count_cache: news_count_cache[area] = dict()
+        if area not in news_data_cache: news_data_cache[area] = dict()
             
-        target_set = target_service_set_dict.get(area, set())
-        for service_name in target_set:
-            if service_name in temp_results:
-                df = temp_results[service_name]
-                news_count_cache[area][service_name] = len(df)
-                news_data_cache[area][service_name] = df
+        # 장애 서비스 중 해당 지역 데이터프레임에 존재하는 것들에 대해 캐시 업데이트
+        for service_name, df in temp_results.items():
+            news_count_cache[area][service_name] = len(df)
+            news_data_cache[area][service_name] = df
 
-    logging.info(f"===== [Thread] 백그라운드 뉴스 검색 완료 (총 {len(all_unique_services)}개 서비스) =====")
+    logging.info(f"===== [Thread] 뉴스 검색 완료 (대상: {len(search_targets)}개) =====")
 
 
 def background_news_search():
     # 세션 상태 방어
     init_session_state()
     
-    # 별도 스레드에서 실행 (UI 블로킹 방지)
+    # 별도 스레드에서 실행
     thread = threading.Thread(
         target=_news_search_task,
         args=(
@@ -575,6 +590,7 @@ def background_news_search():
             st.session_state.news_count_cache,
             st.session_state.news_data_cache,
             st.session_state.target_service_set_dict,
+            st.session_state.status_df_dict,
             st.session_state.search_hour,
             st.session_state.news_and_keywords
         ),

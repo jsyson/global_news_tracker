@@ -29,17 +29,18 @@ def display_chart(chart_list, color_code, chart_height=50, label_tick=False):
 
     # Altair를 사용한 라인 차트 생성
     line_chart = alt.Chart(chart_data).mark_line().encode(
-        x=alt.X('Time', title=None, axis=alt.Axis(labels=label_tick, ticks=label_tick)),  # 축 레이블과 틱 제거
+        x=alt.X('Time', title=None, axis=alt.Axis(labels=label_tick, ticks=label_tick)),
         y=alt.Y('Report Count', title=None, axis=alt.Axis(labels=label_tick, ticks=label_tick)),
         color=alt.value(color_code)
     ).properties(
-        height=chart_height  # 차트 높이 설정
+        height=chart_height,
+        width='container'
     )
 
     # 최대값이 0이면 이대로 뿌려주고 끝낸다.
     if chart_data['Report Count'].max() == 0:
-        # 차트를 Streamlit에 표시
-        st.altair_chart(line_chart, width="stretch")
+        # 설정을 여기서 적용하여 단일 차트로 표시
+        st.altair_chart(line_chart.configure_view(strokeWidth=0).configure_axis(grid=False), width='stretch')
         return
 
     # 최대값이 있을 경우 화면에 표시해준다.
@@ -71,10 +72,14 @@ def display_chart(chart_list, color_code, chart_height=50, label_tick=False):
     ))
 
     # 차트와 텍스트를 결합하여 표시
-    final_chart = line_chart + text
+    final_chart = (line_chart + text).configure_view(
+        strokeWidth=0
+    ).configure_axis(
+        grid=False
+    )
 
     # 차트를 Streamlit에 표시
-    st.altair_chart(final_chart, width="stretch")
+    st.altair_chart(final_chart, width='stretch')
 
 
 def click_button(area, selected_service_name):
@@ -154,10 +159,10 @@ def display_dashboard(area):
                 st.session_state.status_cache[area][item] = (status, chart_list)
 
             with st.container():
-                # 상태
+                # 상태 및 색상 결정
                 _, color_code, _ = config.get_status_color(item, status)
 
-                # [수정] 차트 데이터가 없거나 최대값이 0인 성공 서비스는 연한 회색으로 표시
+                # 차트 데이터 유무 판별
                 has_chart_data = False
                 if chart_list is not None and len(chart_list) > 0:
                     if max(chart_list) > 0:
@@ -165,67 +170,125 @@ def display_dashboard(area):
                 
                 is_success = (status == config.get_downdetector_web.SUCCESS or status is None)
                 if not has_chart_data and is_success:
-                    color_code = '#E0E0E0BB'  # 연한 회색 (Light Gray)
+                    color_code = '#E0E0E0BB'
 
                 if item in st.session_state.companies_list_dict[area]:
                     index_code = st.session_state.companies_list_dict[area].index(item)
                 else:
                     index_code = 'None'
 
-                unique_id = f'btn-{re.sub(r"[^a-zA-Z]", "", item).lower()}-{area.lower()}-{index_code}'
+                # ID 생성 (알파벳/숫자 포함하도록 수정하여 GTA 5 등 대응)
+                safe_name = re.sub(r"[^a-zA-Z0-9]", "", item).lower()
+                unique_id = f'btn-{safe_name}-{area.lower()}-{index_code}'
                 news_count = st.session_state.news_count_cache.get(area, {}).get(item, 0)
 
-                # 1. 버튼 스타일 정의
-                st.markdown(f'<style>.element-container:has(#{unique_id})'
-                            ' + div button '
-                            """{
-                    position: relative;
-                    font-size: 14px;
-                    font-weight: bold;
-                    line-height: 1.2;
-                    padding: 10px 5px;
-                    margin: 0;
-                    border: 0px solid #ccc;
-                    background-color: """ + f'{color_code};' + """
-                    text-align: center;
-                    border-radius: 10px;
-                    width: 100% !important;
-                    height: 50px !important;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: black;
-                 }
-                 </style>""", unsafe_allow_html=True)
+                # 서비스명 길이에 따른 다이나믹 폰트 크기 결정
+                name_len = len(item)
+                if name_len < 11:
+                    f_size = "17px"
+                elif name_len < 17:
+                    f_size = "15px"
+                else:
+                    f_size = "13px"
 
-                # 2. 버튼 출력
-                st.markdown(f'<span id="{unique_id}"></span>', unsafe_allow_html=True)
+                # 1. 초소형 카드 스타일 및 간격 제거
+                st.markdown(f"""
+                    <style>
+                    /* 컨테이너 간격 강제 제거 */
+                    [data-testid="stVerticalBlock"] > div:has(#{unique_id}) {{
+                        gap: 0px !important;
+                        margin-bottom: -15px !important;
+                    }}
+                    .service-card-{unique_id} {{
+                        /* height: 120px; */ 
+                        display: flex;
+                        flex-direction: column;
+                        padding: 0px;
+                        overflow: visible;
+                    }}
+                    /* 버튼 스타일: 높이 절대 고정 및 텍스트 클램핑 */
+                    .element-container:has(#{unique_id}) + div button {{
+                        background-color: {color_code} !important;
+                        border-radius: 4px !important;
+                        height: 48px !important;
+                        min-height: 48px !important;
+                        max-height: 48px !important;
+                        padding: 2px 4px !important;
+                        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+                        border: none !important;
+                        overflow: hidden !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }}
+                    /* 버튼 내부 텍스트 타겟팅 및 줄 제한 */
+                    .element-container:has(#{unique_id}) + div button p {{
+                        font-size: {f_size} !important;
+                        font-weight: 400 !important;
+                        color: #111 !important;
+                        line-height: 1.1 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        display: -webkit-box !important;
+                        -webkit-line-clamp: 2 !important; /* 최대 2줄 고정 */
+                        -webkit-box-orient: vertical !important;
+                        text-overflow: ellipsis !important;
+                        overflow: hidden !important;
+                        word-break: break-word !important;
+                    }}
+                    .element-container:has(#{unique_id}) + div button:hover {{
+                        transform: translateY(-5px) scale(1.03);
+                        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+                        filter: brightness(1.08);
+                        z-index: 100;
+                    }}
+                    /* 배지 컨테이너의 수직 여백 및 공간 강제 제거 */
+                    [data-testid="stElementContainer"]:has(#badge-wrapper-{unique_id}) {{
+                        height: 0px !important;
+                        min-height: 0px !important;
+                        margin-top: -16px !important; /* Streamlit 기본 gap 상쇄 */
+                        margin-bottom: 0px !important;
+                        padding: 0px !important;
+                        z-index: 999 !important;
+                    }}
+                    </style>
+                    <div class="service-card-{unique_id}">
+                """, unsafe_allow_html=True)
+
+                # 2. 버튼 출력 (앵커 span은 공간 차지 않게 처리)
+                st.markdown(f'<span id="{unique_id}" style="display:none;"></span>', unsafe_allow_html=True)
                 if st.button(f"{item}", key=unique_id, on_click=click_button, args=(area, item,), use_container_width=True):
                     st.session_state.selected_area = area
                     st.session_state.selected_service_name = item
                     st.switch_page(config.NEWSBOT_PAGE)
 
-                # 3. 뉴스 배지 오버레이 (버튼 바로 위에 띄움)
+                # 뉴스 배지 (상대적 위치로 복구하되 공간은 0으로)
                 if news_count > 0:
                     st.markdown(f"""
-                        <div style="position: relative; height: 0px; top: -45px; pointer-events: none; z-index: 1000;">
-                            <div style="position: absolute; right: 10px; 
-                                        background-color: red; color: white; border-radius: 50%; 
-                                        width: 22px; height: 22px; display: flex; 
-                                        align-items: center; justify-content: center; 
-                                        font-size: 12px; font-weight: bold;
-                                        box-shadow: 1px 1px 3px rgba(0,0,0,0.3);">
+                        <div id="badge-wrapper-{unique_id}" style="position: relative; height: 0px; top: -58px; pointer-events: none; overflow: visible;">
+                            <div style="position: absolute; right: -6px; top: 0px; 
+                                        background: #1E1E1E;
+                                        color: #FF4B4B; 
+                                        border-radius: 10px; 
+                                        min-width: 18px; height: 18px; padding: 0 5px;
+                                        display: flex; align-items: center; justify-content: center; 
+                                        font-size: 10px; font-weight: 900;
+                                        border: 1.5px solid #FF4B4B;
+                                        box-shadow: 0 0 10px rgba(255, 75, 75, 0.4);
+                                        z-index: 1000;">
                                 {news_count}
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
 
-                # 4. 차트 출력 (버튼 아래에 배치)
+                # 3. 차트 출력 (높이 60px 고정)
                 if st.session_state.display_chart:
-                    display_chart(chart_list, color_code)
-                
-                # 간격 조정
-                st.markdown('<div style="height: 5px;"></div>', unsafe_allow_html=True)
+                    display_chart(chart_list, color_code)  # , chart_height=60)
+                else:
+                    st.markdown('<div style="height: 5px;"></div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
 
     with st.expander('Raw Data'):
         if area in st.session_state.status_df_dict:
@@ -281,7 +344,7 @@ def display_config_tab(area):
 
 def make_all_dashboard_tabs(area, icon='', image_path=None):
     # 사이드바
-    st.session_state.dashboard_auto_tab_timer = st.sidebar.number_input('페이지 자동 전환 주기(초), 0=Off',
+    st.session_state.dashboard_auto_tab_timer = st.sidebar.number_input('페이지 전환/뉴스 검색 주기(초), 0=Off',
                                                                         value=st.session_state.dashboard_auto_tab_timer,
                                                                         format='%d', min_value=0)
     st.session_state.num_dashboard_columns = st.sidebar.number_input('출력 컬럼 수',
