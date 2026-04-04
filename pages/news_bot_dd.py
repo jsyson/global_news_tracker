@@ -82,6 +82,22 @@ def fetch_news(keyword_, infinite_loop=False):
     with st.spinner('뉴스 검색중...'):
         # config에 정의된 공용 함수 사용
         news_df_ = config.get_google_news(keyword_, st.session_state.search_hour, st.session_state.news_and_keywords)
+        
+        # [개선] 검색된 결과를 모든 관련 지역 캐시에 즉시 반영 (대시보드 배지 완벽 동기화)
+        # 서비스가 US에 있든 JP에 있든, 해당 종목이 존재하는 모든 대시보드에 배지를 띄웁니다.
+        for area in config.AREA_LIST:
+            # 해당 지역의 전체 서비스 목록이나 감시 목록에 이 서비스가 있는지 확인
+            total_list = st.session_state.companies_list_dict.get(area, [])
+            monitored_set = st.session_state.target_service_set_dict.get(area, set())
+            
+            if keyword_ in total_list or keyword_ in monitored_set:
+                if area not in st.session_state.news_count_cache: st.session_state.news_count_cache[area] = dict()
+                if area not in st.session_state.news_data_cache: st.session_state.news_data_cache[area] = dict()
+                
+                st.session_state.news_count_cache[area][keyword_] = len(news_df_)
+                st.session_state.news_data_cache[area][keyword_] = news_df_
+                logging.info(f"수동 검색 결과 캐시 반영: {area} - {keyword_}")
+            
         display_news_df(news_df_, keyword_)
 
     while infinite_loop:
@@ -270,9 +286,20 @@ st.session_state.search_hour = st.sidebar.number_input('최근 몇시간 뉴스�
                                                       value=st.session_state.search_hour, format='%d')
 search_hour = st.session_state.search_hour
 
+def on_keyword_change():
+    logging.info("뉴스 검색 키워드 변경 감지 - 캐시 초기화 및 재검색 시작")
+    # 기존 뉴스 캐시 비우기
+    st.session_state.news_count_cache = dict()
+    st.session_state.news_data_cache = dict()
+    # 새로운 키워드로 즉시 백그라운드 검색 트리거
+    config.background_news_search()
+    st.toast("새로운 키워드로 뉴스 검색을 시작합니다.", icon="🔎")
+
+
 and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드 (1개만 적용 가능)",
                                      options=['outage', 'blackout', 'failure'],
-                                     default=st.session_state.news_and_keywords)
+                                     default=st.session_state.news_and_keywords,
+                                     on_change=on_keyword_change)
 st.session_state.news_and_keywords = and_keyword
 
 st.session_state.search_interval_min = st.sidebar.number_input('새로고침 주기(분)',

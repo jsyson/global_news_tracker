@@ -263,19 +263,19 @@ def display_dashboard(area):
                     st.session_state.selected_service_name = item
                     st.switch_page(config.NEWSBOT_PAGE)
 
-                # 뉴스 배지 (상대적 위치로 복구하되 공간은 0으로)
+                # 뉴스 배지 (고대비 하이라이트 스타일: 어떤 버튼 색상에서도 가시성 확보)
                 if news_count > 0:
                     st.markdown(f"""
                         <div id="badge-wrapper-{unique_id}" style="position: relative; height: 0px; top: -58px; pointer-events: none; overflow: visible;">
                             <div style="position: absolute; right: -6px; top: 0px; 
-                                        background: #1E1E1E;
-                                        color: #FF4B4B; 
+                                        background: #000000;
+                                        color: #FFD700; 
                                         border-radius: 10px; 
                                         min-width: 18px; height: 18px; padding: 0 5px;
                                         display: flex; align-items: center; justify-content: center; 
                                         font-size: 10px; font-weight: 900;
-                                        border: 1.5px solid #FF4B4B;
-                                        box-shadow: 0 0 10px rgba(255, 75, 75, 0.4);
+                                        border: 1.5px solid #FFD700;
+                                        box-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 4px rgba(255, 215, 0, 0.2);
                                         z-index: 1000;">
                                 {news_count}
                             </div>
@@ -359,7 +359,7 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.subheader(f'Global Service Status - {area} {icon}')
-        st.caption("Ver 2.0")
+        st.caption("Ver 2.0 (2026.04.04)")
 
         # Font Awesome CSS를 HTML에 추가
         # st.markdown(
@@ -387,6 +387,11 @@ def make_all_dashboard_tabs(area, icon='', image_path=None):
                 unsafe_allow_html=True
             )
             logging.info(f'{image_path} 출력 완료')
+
+    # 연속 크롤링 실패 경고 표시
+    fail_count = st.session_state.crawl_fail_count.get(area, 0)
+    if fail_count >= 5:
+        st.error(f"⚠️ **{area}** 지역 크롤링이 {fail_count}회 연속 실패했습니다. 현재 데이터는 최신이 아닐 수 있습니다.", icon="🚨")
 
     # 탭 설정
     dashboard_tab, config_tab = st.tabs(["대시보드", "감시설정"])

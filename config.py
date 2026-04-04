@@ -245,6 +245,9 @@ def init_session_state():
     if 'refresh_done_dict' not in st.session_state:
         st.session_state.refresh_done_dict = {area: False for area in AREA_LIST}
 
+    if 'crawl_fail_count' not in st.session_state:
+        st.session_state.crawl_fail_count = {area: 0 for area in AREA_LIST}
+
 
 # # # # # # # # # # # # # # #
 # 피클 파일 로딩 함수
@@ -337,11 +340,15 @@ def refresh_status_and_save_companies(area):
     # 일부라도 크롤링에 성공했다면 데이터 업데이트
     if new_status_df is not None and len(new_status_df) > 0:
         st.session_state.status_df_dict[area] = new_status_df
+        st.session_state.crawl_fail_count[area] = 0 # 성공 시 카운트 초기화
         logging.info(f"{area} 일부 또는 전체 서비스 크롤링 성공 - 데이터 업데이트 완료")
     else:
         # 모든 서비스 크롤링에 실패했을 경우
+        st.session_state.crawl_fail_count[area] += 1 # 실패 카운트 증가
+        logging.error(f"{area} 모든 서비스 크롤링 실패! (누적 {st.session_state.crawl_fail_count[area]}회)")
+        
         if st.session_state.status_df_dict.get(area) is not None and len(st.session_state.status_df_dict[area]) > 0:
-            logging.error(f"{area} 모든 서비스 크롤링 실패! (이전 성공 데이터 유지)")
+            logging.error(f"{area} 이전 성공 데이터 유지")
         else:
             logging.error(f"{area} 모든 서비스 크롤링 실패! (최초 실행 실패 - 데이터 없음)")
             # 최초 실행 시 실패했다면 루프 방지를 위해 빈 DF라도 넣어줌
@@ -473,9 +480,9 @@ def get_status_color(name, status):
 def get_google_news(keyword, search_hour=1, add_keywords=[]):
     query = keyword
 
-    # 추가 조건 (outage 등) - debug를 위해 일단 제외
-    # if add_keywords:
-    #     query += ' ' + ' '.join(add_keywords)
+    # 추가 조건 (outage 등)
+    if add_keywords:
+        query += ' ' + ' '.join(add_keywords)
     
     logging.info(f"뉴스 검색중 : {query} ({search_hour}h)")
 
@@ -507,11 +514,11 @@ def get_google_news(keyword, search_hour=1, add_keywords=[]):
                     title = title[:minus_index].strip()
 
                 # 기사 제목에 검색 키워드 검사 (공백 무시 비교로 매칭률 향상)
-                clean_keyword = keyword.lower().replace(" ", "")
-                clean_title = title.lower().replace(" ", "")
-                
-                if clean_keyword not in clean_title:
-                    continue
+                # clean_keyword = keyword.lower().replace(" ", "")
+                # clean_title = title.lower().replace(" ", "")
+                #
+                # if clean_keyword not in clean_title:
+                #     continue
 
                 title_list.append(title)
                 source_list.append(data.source.title)
@@ -534,27 +541,32 @@ def get_google_news(keyword, search_hour=1, add_keywords=[]):
 def _news_search_task(area_list, news_count_cache, news_data_cache, target_service_set_dict, status_df_dict, search_hour, add_keywords):
     logging.info("===== [Thread] 백그라운드 뉴스 검색 시작 =====")
     
-    # 1. 이슈가 있는 모든 서비스(DANGER/WARNING) 추출
-    # 감시 목록에 있든 없든, 현재 대시보드에 장애로 뜬 모든 것을 대상으로 합니다.
     search_targets_set = set()
+    
     for area in area_list:
+        monitored_set = target_service_set_dict.get(area, set())
         if area in status_df_dict:
             df = status_df_dict[area]
             if not df.empty:
-                # SUCCESS(정상)가 아닌 모든 서비스의 이름을 가져옵니다.
-                issues = df[df[get_downdetector_web.CLASS] != get_downdetector_web.SUCCESS][get_downdetector_web.NAME].tolist()
-                search_targets_set.update(issues)
+                # 1. DANGER 등급인 모든 서비스 (목록 포함 여부 무관) 추출
+                dangers = df[df[get_downdetector_web.CLASS] == get_downdetector_web.DANGER][get_downdetector_web.NAME].tolist()
+                search_targets_set.update(dangers)
+                
+                # 2. 사전에 설정한 감시 목록 서비스 중 WARNING 등급인 서비스 추출
+                warnings = df[df[get_downdetector_web.CLASS] == get_downdetector_web.WARNING][get_downdetector_web.NAME].tolist()
+                monitored_warnings = [w for w in warnings if w in monitored_set]
+                search_targets_set.update(monitored_warnings)
     
     # 리스트로 변환
     search_targets = list(search_targets_set)
     
     if not search_targets:
-        logging.info("현재 장애가 발생한 서비스가 없어 자동 뉴스 검색을 건너뜁니다.")
+        logging.info("검색 조건(Danger 전체 또는 감시 중인 Warning)에 맞는 서비스가 없어 뉴스 검색을 건너뜁니다.")
         return
 
     logging.info(f"뉴스 검색 대상 확정 (총 {len(search_targets)}개): {search_targets}")
 
-    # 2. 검색 수행
+    # 3. 검색 수행
     temp_results = {}
     for service_name in search_targets:
         try:
@@ -565,12 +577,11 @@ def _news_search_task(area_list, news_count_cache, news_data_cache, target_servi
             logging.error(f"뉴스 검색 에러 ({service_name}): {e}")
             time.sleep(3.0)
 
-    # 3. 결과 배분 (해당 서비스가 속한 모든 지역 캐시에 반영)
+    # 4. 결과 배분
     for area in area_list:
         if area not in news_count_cache: news_count_cache[area] = dict()
         if area not in news_data_cache: news_data_cache[area] = dict()
             
-        # 장애 서비스 중 해당 지역 데이터프레임에 존재하는 것들에 대해 캐시 업데이트
         for service_name, df in temp_results.items():
             news_count_cache[area][service_name] = len(df)
             news_data_cache[area][service_name] = df
