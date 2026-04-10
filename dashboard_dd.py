@@ -184,9 +184,9 @@ def display_dashboard(area):
 
                 # 서비스명 길이에 따른 다이나믹 폰트 크기 결정
                 name_len = len(item)
-                if name_len < 11:
+                if name_len < 10:
                     f_size = "17px"
-                elif name_len < 17:
+                elif name_len < 16:
                     f_size = "15px"
                 else:
                     f_size = "13px"
@@ -263,20 +263,21 @@ def display_dashboard(area):
                     st.session_state.selected_service_name = item
                     st.switch_page(config.NEWSBOT_PAGE)
 
-                # 뉴스 배지 (고대비 하이라이트 스타일: 어떤 버튼 색상에서도 가시성 확보)
+                # 뉴스 배지 (딥 인디고 스타일: 상태 색상과 겹치지 않는 고대비 디자인)
                 if news_count > 0:
                     st.markdown(f"""
-                        <div id="badge-wrapper-{unique_id}" style="position: relative; height: 0px; top: -58px; pointer-events: none; overflow: visible;">
-                            <div style="position: absolute; right: -6px; top: 0px; 
-                                        background: #000000;
-                                        color: #FFD700; 
-                                        border-radius: 10px; 
-                                        min-width: 18px; height: 18px; padding: 0 5px;
+                        <div id="badge-wrapper-{unique_id}" style="position: relative; height: 0px; top: -62px; pointer-events: none; overflow: visible;">
+                            <div style="position: absolute; right: -8px; top: 0px; 
+                                        background: linear-gradient(135deg, #0575E6 0%, #021B79 100%);
+                                        color: #FFFFFF; 
+                                        border-radius: 12px; 
+                                        min-width: 24px; height: 24px; padding: 0 7px;
                                         display: flex; align-items: center; justify-content: center; 
-                                        font-size: 10px; font-weight: 900;
-                                        border: 1.5px solid #FFD700;
-                                        box-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 4px rgba(255, 215, 0, 0.2);
-                                        z-index: 1000;">
+                                        font-size: 13px; font-weight: 800;
+                                        border: 1px solid #FFFFFF;
+                                        box-shadow: 0 4px 10px rgba(0,0,0,0.3), 0 0 5px rgba(5, 117, 230, 0.3);
+                                        z-index: 1000;
+                                        line-height: 1;">
                                 {news_count}
                             </div>
                         </div>

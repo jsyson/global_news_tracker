@@ -288,12 +288,19 @@ search_hour = st.session_state.search_hour
 
 def on_keyword_change():
     logging.info("뉴스 검색 키워드 변경 감지 - 캐시 초기화 및 재검색 시작")
+    # [수정] 글로벌 공유 객체에 즉시 반영하여 백그라운드 스레드와 동기화합니다.
+    # st.session_state.news_and_keywords는 on_change 시점에 이미 업데이트된 상태입니다.
+    # 하지만 multiselect의 특성상 세션 상태를 직접 읽는 것이 안전합니다.
+    new_kw = st.session_state.get("news_and_keywords", [])
+    config.GLOBAL_THREAD_SHARED_DATA["keywords"] = new_kw
+    
     # 기존 뉴스 캐시 비우기
     st.session_state.news_count_cache = dict()
     st.session_state.news_data_cache = dict()
+    
     # 새로운 키워드로 즉시 백그라운드 검색 트리거
     config.background_news_search()
-    st.toast("새로운 키워드로 뉴스 검색을 시작합니다.", icon="🔎")
+    st.toast(f"키워드 반영 완료: {new_kw}", icon="🔎")
 
 
 and_keyword = st.sidebar.multiselect("뉴스 검색 추가 키워드 (1개만 적용 가능)",

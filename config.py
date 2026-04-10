@@ -9,6 +9,7 @@ import pytz
 import feedparser
 import requests
 import re
+import urllib.parse
 
 
 import threading
@@ -43,9 +44,14 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 import get_downdetector_web
 
+# 스레드와 메인 세션 간의 실시간 데이터 공유를 위한 객체
+if 'GLOBAL_THREAD_SHARED_DATA' not in globals():
+    GLOBAL_THREAD_SHARED_DATA = {"keywords": []}
+
 
 # 파일명 등 각종 설정
 AREA_LIST = ['US', 'JP']
+USE_TRANSLATION = False  # 로컬 LLM 번역 기능 사용 여부 (True/False)
 
 DASHBOARD_US_PAGE = 'pages/dashboard_us.py'
 DASHBOARD_JP_PAGE = 'pages/dashboard_jp.py'
@@ -137,7 +143,7 @@ DEFAULT_COMPANIES_SET_DICT = {
         'Google Drive',
         # 'Google Duo',
         'Google Maps',
-        'Google Meet',
+        # 'Google Meet',
         'Google Play',
         # 'Google Public DNS',
         # 'Google Workspace',
@@ -220,8 +226,14 @@ def init_session_state():
     if "geolocations_dict" not in st.session_state:
         st.session_state.geolocations_dict = pickle_load_cache_file(GEOLOC_CACHE_FILE, dict)
 
-    if 'trans_text_list' not in st.session_state:
-        st.session_state.trans_text_list = pickle_load_cache_file(TRANS_CACHE_FILE, list)
+    if 'trans_cache_dict' not in st.session_state:
+        loaded_trans = pickle_load_cache_file(TRANS_CACHE_FILE, dict)
+        if isinstance(loaded_trans, list):
+            # 기존 리스트 데이터를 딕셔너리로 마이그레이션
+            st.session_state.trans_cache_dict = {item[0]: item[1] for item in loaded_trans if isinstance(item, tuple) and len(item) == 2}
+            logging.info(f"번역 캐시 마이그레이션 완료: {len(st.session_state.trans_cache_dict)}건")
+        else:
+            st.session_state.trans_cache_dict = loaded_trans
 
     if "news_list" not in st.session_state:
         st.session_state.news_list = []
@@ -247,6 +259,9 @@ def init_session_state():
 
     if 'crawl_fail_count' not in st.session_state:
         st.session_state.crawl_fail_count = {area: 0 for area in AREA_LIST}
+
+    if 'news_init_done_dict' not in st.session_state:
+        st.session_state.news_init_done_dict = {area: False for area in AREA_LIST}
 
 
 # # # # # # # # # # # # # # #
@@ -342,6 +357,11 @@ def refresh_status_and_save_companies(area):
         st.session_state.status_df_dict[area] = new_status_df
         st.session_state.crawl_fail_count[area] = 0 # 성공 시 카운트 초기화
         logging.info(f"{area} 일부 또는 전체 서비스 크롤링 성공 - 데이터 업데이트 완료")
+
+        # [추가] 최초 실행 시 뉴스 검색 트리거 (지역별 1회 한정)
+        if not st.session_state.news_init_done_dict.get(area, False):
+            st.session_state.news_init_done_dict[area] = True
+            background_news_search()
     else:
         # 모든 서비스 크롤링에 실패했을 경우
         st.session_state.crawl_fail_count[area] += 1 # 실패 카운트 증가
@@ -476,51 +496,74 @@ def get_status_color(name, status):
 # 뉴스 검색 관련 공용 함수
 # # # # # # # # # # # # # # #
 
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "qwen3:14b"  # "llama3.2:3b"
 
-def get_google_news(keyword, search_hour=1, add_keywords=[]):
-    query = keyword
 
-    # 추가 조건 (outage 등)
+def translate_text(text, trans_cache_dict=None):
+    """로컬 Ollama를 사용하여 뉴스 제목 번역 및 캐싱 (스레드 안전)"""
+    if not USE_TRANSLATION or not text or not isinstance(text, str):
+        return text
+
+    # 캐시 딕셔너리가 제공되지 않으면 세션 상태 사용 시도 (메인 스레드용)
+    cache = trans_cache_dict if trans_cache_dict is not None else st.session_state.get('trans_cache_dict', {})
+
+    # 1. 캐시 확인
+    if text in cache:
+        return cache[text]
+
+    # 2. Ollama API 호출
+    prompt = f"Translate the following news headline into natural Korean. Output only the translated text.\n\nHeadline: {text}\nTranslation:"
+    payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
+
+    try:
+        response = requests.post(OLLAMA_URL, json=payload, timeout=10)
+        if response.status_code == 200:
+            translated_text = response.json().get('response', '').strip()
+            if translated_text:
+                cache[text] = translated_text
+                logging.info(f"번역 성공. {text} --> {translated_text}")
+                return translated_text
+    except:
+        pass
+
+    logging.info(f"번역 실패! {text}")
+    return text
+
+
+def get_google_news(keyword, search_hour=1, add_keywords=[], trans_cache_dict=None):
+    # 제목에 서비스명이 반드시 포함되도록 intitle: 연산자를 사용합니다.
+    # 이를 통해 본문에만 언급된 무관한 기사들을 필터링하여 검색 정확도를 높입니다.
+    query = f'intitle:"{keyword}"'
+
+    # 테스트를 위해 뉴스 검색 조건을 완화함. 추후 주석처리 제거 예정
     if add_keywords:
         query += ' ' + ' '.join(add_keywords)
     
-    logging.info(f"뉴스 검색중 : {query} ({search_hour}h)")
+    # 전체 쿼리를 URL 인코딩하여 & 등의 특수문자가 파라미터를 깨뜨리지 않게 합니다.
+    search_query = f"{query} when:{search_hour}h"
+    encoded_query = urllib.parse.quote(search_query)
 
-    url = f"https://news.google.com/rss/search?q={query}"
-    if search_hour > 0:
-        url += f"+when:{search_hour}h"
-    url += f'&hl=en-US&gl=US&ceid=US:en'
-    url = url.replace(' ', '%20')
+    logging.info(f"뉴스 검색중 : {query} ({encoded_query})")
 
-    title_list = []
-    source_list = []
-    pubtime_list = []
-    link_list = []
+    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+    # url = url.replace(' ', '%20') # quote 함수가 공백까지 처리하므로 불필요해졌습니다.
 
-    # 실제 브라우저처럼 보이기 위한 헤더 추가
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-    }
+    title_list, trans_title_list, source_list, pubtime_list, link_list = [], [], [], [], []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
 
     try:
-        # 타임아웃을 15초로 연장
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             datas = feedparser.parse(res.text).entries
             for data in datas:
                 title = data.title
                 if ' - ' in title:
-                    minus_index = title.rindex(' - ')
-                    title = title[:minus_index].strip()
-
-                # 기사 제목에 검색 키워드 검사 (공백 무시 비교로 매칭률 향상)
-                # clean_keyword = keyword.lower().replace(" ", "")
-                # clean_title = title.lower().replace(" ", "")
-                #
-                # if clean_keyword not in clean_title:
-                #     continue
+                    title = title[:title.rindex(' - ')].strip()
 
                 title_list.append(title)
+                # 번역 수행 (캐시 딕셔너리 전달)
+                trans_title_list.append(translate_text(title, trans_cache_dict))
                 source_list.append(data.source.title)
                 link_list.append(data.link)
 
@@ -528,84 +571,113 @@ def get_google_news(keyword, search_hour=1, add_keywords=[]):
                 kst = pytz.timezone('Asia/Seoul')
                 pubtime = pubtime.replace(tzinfo=pytz.utc).astimezone(kst)
                 pubtime_list.append(pubtime.strftime('%Y-%m-%d %H:%M:%S'))
-        else:
-            logging.error(f"구글 뉴스 응답 에러: {res.status_code}")
-
     except Exception as e:
         logging.error(f"뉴스 검색 오류 ({keyword}): {e}")
-    
-    result = {'제목': title_list, '언론사': source_list, '발행시간': pubtime_list, '링크': link_list}
-    return pd.DataFrame(result)
+
+    logging.info(f"뉴스 검색 완료 : {query} -> {len(title_list)}건")
+    return pd.DataFrame({'제목': title_list, '번역제목': trans_title_list, '언론사': source_list, '발행시간': pubtime_list, '링크': link_list})
 
 
-def _news_search_task(area_list, news_count_cache, news_data_cache, target_service_set_dict, status_df_dict, search_hour, add_keywords):
-    logging.info("===== [Thread] 백그라운드 뉴스 검색 시작 =====")
-    
-    search_targets_set = set()
-    
-    for area in area_list:
-        monitored_set = target_service_set_dict.get(area, set())
-        if area in status_df_dict:
-            df = status_df_dict[area]
-            if not df.empty:
-                # 1. DANGER 등급인 모든 서비스 (목록 포함 여부 무관) 추출
-                dangers = df[df[get_downdetector_web.CLASS] == get_downdetector_web.DANGER][get_downdetector_web.NAME].tolist()
-                search_targets_set.update(dangers)
-                
-                # 2. 사전에 설정한 감시 목록 서비스 중 WARNING 등급인 서비스 추출
-                warnings = df[df[get_downdetector_web.CLASS] == get_downdetector_web.WARNING][get_downdetector_web.NAME].tolist()
-                monitored_warnings = [w for w in warnings if w in monitored_set]
-                search_targets_set.update(monitored_warnings)
-    
-    # 리스트로 변환
-    search_targets = list(search_targets_set)
-    
-    if not search_targets:
-        logging.info("검색 조건(Danger 전체 또는 감시 중인 Warning)에 맞는 서비스가 없어 뉴스 검색을 건너뜁니다.")
+def _news_others_search_task(area_list, others_list, news_count_cache, news_data_cache, trans_cache_dict, search_hour, add_keywords, total_interval):
+    """나머지 화면 출력 서비스들을 백그라운드에서 분산 검색하는 스레드용 함수 (Phase 2)"""
+    if not others_list:
         return
 
-    logging.info(f"뉴스 검색 대상 확정 (총 {len(search_targets)}개): {search_targets}")
-
-    # 3. 검색 수행
-    temp_results = {}
-    for service_name in search_targets:
+    interval_gap = round(max(total_interval / len(others_list), 2.0), 1)
+    logging.info(f"===== [Thread] 기타 화면 출력 서비스 {len(others_list)}개 분산 검색 시작 (검색간격: {interval_gap}초) =====")
+    
+    for service_name in others_list:
         try:
-            df = get_google_news(service_name, search_hour, add_keywords)
-            temp_results[service_name] = df
-            time.sleep(1.5) # 구글 차단 방지용 간격
-        except Exception as e:
-            logging.error(f"뉴스 검색 에러 ({service_name}): {e}")
-            time.sleep(3.0)
-
-    # 4. 결과 배분
-    for area in area_list:
-        if area not in news_count_cache: news_count_cache[area] = dict()
-        if area not in news_data_cache: news_data_cache[area] = dict()
+            # [수정] 인자로 받은 add_keywords 대신 실시간 공유 데이터를 사용합니다.
+            current_keywords = GLOBAL_THREAD_SHARED_DATA.get("keywords", add_keywords)
+            df = get_google_news(service_name, search_hour, current_keywords, trans_cache_dict)
             
-        for service_name, df in temp_results.items():
-            news_count_cache[area][service_name] = len(df)
-            news_data_cache[area][service_name] = df
+            for area in area_list:
+                # 안전 코드: 지역 키가 없으면 생성
+                if area not in news_count_cache: news_count_cache[area] = dict()
+                if area not in news_data_cache: news_data_cache[area] = dict()
 
-    logging.info(f"===== [Thread] 뉴스 검색 완료 (대상: {len(search_targets)}개) =====")
+                news_count_cache[area][service_name] = len(df)
+                news_data_cache[area][service_name] = df
+            time.sleep(interval_gap)
+        except:
+            logging.error(f"{service_name} 뉴스 검색 중 오류 발생!", exc_info=True)
+            time.sleep(1.0)
+    
+    try:
+        with open(TRANS_CACHE_FILE, 'wb') as f:
+            pickle.dump(trans_cache_dict, f)
+    except Exception as e:
+        logging.error("번역 캐시 파일 덤프 중 오류 발생!", exc_info=True)
+
+    logging.info("===== [Thread] 모든 기타 뉴스 검색 완료 =====")
 
 
 def background_news_search():
-    # 세션 상태 방어
+    """뉴스 검색 2단계 전략 실행: Phase 1(동기 우선순위) -> Phase 2(비동기 기타)"""
     init_session_state()
     
-    # 별도 스레드에서 실행
-    thread = threading.Thread(
-        target=_news_search_task,
-        args=(
-            AREA_LIST,
-            st.session_state.news_count_cache,
-            st.session_state.news_data_cache,
-            st.session_state.target_service_set_dict,
-            st.session_state.status_df_dict,
-            st.session_state.search_hour,
-            st.session_state.news_and_keywords
-        ),
-        daemon=True
-    )
-    thread.start()
+    # [추가] UI에서 변경된 실시간 키워드를 공유 객체에 즉시 업데이트합니다.
+    GLOBAL_THREAD_SHARED_DATA["keywords"] = st.session_state.news_and_keywords
+    
+    priority_targets = set()
+    all_other_targets = set()
+    
+    for area in AREA_LIST:
+        monitored_set = st.session_state.target_service_set_dict.get(area, set())
+        
+        if area in st.session_state.status_df_dict:
+            df = st.session_state.status_df_dict[area]
+            if not df.empty:
+                # 1. DANGER 상태인 모든 서비스 (화면 출력 대상)
+                dangers = set(df[df[get_downdetector_web.CLASS] == get_downdetector_web.DANGER][get_downdetector_web.NAME].tolist())
+                # 2. 감시 중인 WARNING 서비스 (화면 출력 대상)
+                warnings = set(df[df[get_downdetector_web.CLASS] == get_downdetector_web.WARNING][get_downdetector_web.NAME].tolist())
+                monitored_warnings = warnings.intersection(monitored_set)
+                
+                priority_targets.update(dangers | monitored_warnings)
+                
+                # 3. 감시 중이지만 SUCCESS 상태인 서비스 (화면 출력 대상 - 2단계 검색 대상)
+                monitored_success = monitored_set - priority_targets
+                all_other_targets.update(monitored_success)
 
+    priority_list = list(priority_targets)
+    others_list = list(all_other_targets)
+
+    logging.info(f"뉴스 검색 대상(화면 출력): 우선순위 {len(priority_list)}개, 기타 {len(others_list)}개")
+
+    # 1단계: 중요 서비스 동기 검색 (즉시 반영)
+    if priority_list:
+        with st.spinner(f"중요 서비스({len(priority_list)}개) 뉴스 우선 검색 중..."):
+            for service_name in priority_list:
+                try:
+                    df = get_google_news(service_name, st.session_state.search_hour, 
+                                         st.session_state.news_and_keywords, 
+                                         st.session_state.trans_cache_dict)
+                    for area in AREA_LIST:
+                        if area not in st.session_state.news_count_cache: st.session_state.news_count_cache[area] = dict()
+                        if area not in st.session_state.news_data_cache: st.session_state.news_data_cache[area] = dict()
+                        st.session_state.news_count_cache[area][service_name] = len(df)
+                        st.session_state.news_data_cache[area][service_name] = df
+                except Exception as e:
+                    logging.error("중요 서비스 뉴스 검색 중 오류 발생!", exc_info=True)
+
+
+    # 2단계: 나머지 화면 노출 서비스 비동기 검색 (백그라운드 스레드)
+    if others_list:
+        thread = threading.Thread(
+            target=_news_others_search_task,
+            args=(
+                AREA_LIST,
+                others_list,
+                st.session_state.news_count_cache,
+                st.session_state.news_data_cache,
+                st.session_state.trans_cache_dict,
+                st.session_state.search_hour,
+                st.session_state.news_and_keywords,
+                st.session_state.dashboard_auto_tab_timer
+            ),
+            daemon=True
+        )
+        thread.start()
+        logging.info(f"Phase 2 비동기 검색 시작 ({len(others_list)}개)")
